@@ -1,0 +1,30 @@
+name: Cleanup branches
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Delete merged branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --prune origin
+
+          for branch in $(git branch -r --merged origin/main \
+            | grep 'origin/' \
+            | grep -v 'origin/main' \
+            | grep -v 'origin/qa' \
+            | sed 's|origin/||'); do
+
+            echo "Removendo: $branch"
+            git push origin --delete "$branch"
+          done
