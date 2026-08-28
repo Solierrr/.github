@@ -1,0 +1,45 @@
+name: Cleanup branches
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete branches without open PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --prune origin
+
+          protected="main
+          qa"
+
+          open_pr_branches=$(gh pr list --state open --json headRefName --jq '.[].headRefName')
+
+          for branch in $(git branch -r | grep 'origin/' | sed 's|.*origin/||' | grep -v '^HEAD$'); do
+            if echo "$protected" | grep -qxF "$branch"; then
+              continue
+            fi
+
+            if echo "$open_pr_branches" | grep -qxF "$branch"; then
+              echo "Mantendo (PR aberto): $branch"
+              continue
+            fi
+
+            echo "Removendo: $branch"
+            git push origin --delete "$branch" || echo "Falha ao remover $branch (talvez já tenha sido removida)."
+          done
