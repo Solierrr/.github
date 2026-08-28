@@ -26,6 +26,6 @@ jobs:
           gh pr create \
             --base qa \
             --head main \
-            --title "chore: sync main into qa" \
-            --body "Sincronização automática de main <> qa" \
-            || echo "PR já existe ou não há mudanças"
+            --title "[AUTO] chore: sync main into qa" \
+            --body "$(printf '# `[AUTO]`\n\nSincronização automática de main <> qa')" \
+            || echo "PR já existe ou não há mudanças a serem feitas."
