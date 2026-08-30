@@ -49,6 +49,6 @@ jobs:
           gh pr create \
             --base qa \
             --head main \
-            --title "[AUTO] chore: sync main into qa" \
+            --title "`[AUTO]` chore: sync main into qa" \
             --body "$body" \
             || echo "PR já existe ou não há mudanças a serem feitas."
