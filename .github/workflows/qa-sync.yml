@@ -22,19 +22,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           body=$(printf '%s\n' \
-            '> ⚠️ Esta PR foi aberta automaticamente pelo workflow `qa-sync`. Nao edite a descricao manualmente - ela e sobrescrita na proxima sincronizacao.' \
+            '> ⚠️ Esta PR foi aberta automaticamente pelo workflow `qa-sync`. Não edite a descrição manualmente - ela é sobrescrita na próxima sincronização.' \
             '' \
             '## Objetivo' \
             '' \
-            'Sincronizar main para qa, mantendo o ambiente de QA alinhado com o que ja foi mergeado em main.' \
+            'Sincronizar main para qa, mantendo o ambiente de QA alinhado com o que já foi mergeado em main.' \
             '' \
-            '## Alteracoes' \
+            '## Alterações' \
             '' \
-            'Tudo que ja esta em main e ainda nao chegou em qa.' \
+            'Tudo que já está em main e ainda não chegou em qa.' \
             '' \
             '## Recursos impactados' \
             '' \
-            'Nenhum diretamente - esta PR so atualiza a branch qa. Sem impacto ate ela ser mergeada.' \
+            'Nenhum diretamente - esta PR só atualiza a branch qa. Sem impacto até ela ser mergeada.' \
             '' \
             '## Rollback' \
             '' \
