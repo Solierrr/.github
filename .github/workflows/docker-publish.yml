@@ -1,4 +1,4 @@
-name: Docker Publish
+name: Docker Hub Publish
 
 on:
   workflow_call:
@@ -9,6 +9,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No-op when the calling repo has no Dockerfile yet (e.g. ai-accessibility,
+      # api-mcp) - lets every repo call this workflow safely, regardless of
+      # whether it's containerized yet.
       - name: Check for Dockerfile
         id: check
         run: |
