@@ -1,0 +1,37 @@
+name: Docker Publish
+
+on:
+  workflow_call:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No-op when the calling repo has no Dockerfile yet (e.g. ai-accessibility,
+      # api-mcp) - lets every repo call this workflow safely, regardless of
+      # whether it's containerized yet.
+      - name: Check for Dockerfile
+        id: check
+        run: |
+          if [ -f Dockerfile ]; then
+            echo "has_dockerfile=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_dockerfile=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/login-action@v3
+        if: steps.check.outputs.has_dockerfile == 'true'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        if: steps.check.outputs.has_dockerfile == 'true'
+        with:
+          context: .
+          push: true
+          tags: |
+            solarianetwork/${{ github.event.repository.name }}:latest
+            solarianetwork/${{ github.event.repository.name }}:${{ github.sha }}
