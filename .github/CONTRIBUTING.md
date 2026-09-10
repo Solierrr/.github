@@ -68,6 +68,84 @@ Pull Requests devem sempre ser mergeadas inicialmente em `qa`, nunca abra Pull R
 - Priorize soluções simples e diretas sobre soluções "genéricas" ou
   "escaláveis" que não foram pedidas.
 
+## Variáveis de Ambiente (Infisical)
+
+> *Toda variável de ambiente (credencial, config, chave de terceiro) da organização vive centralizada no **Infisical** — não existe mais `.env` preenchido manualmente nem secret guardado só na cabeça de alguém. O `.env.example` de cada repositório só documenta os nomes esperados; o valor real sempre vem do Infisical.*
+
+- **Projeto**: `2296d19c-5f3b-41e1-afa3-fcde39966a71` (org "Solaria").
+- **Ambientes**: `local`, `qa`, `prod` (não existe `dev`).
+- **Organização**: pastas por categoria/tecnologia (`/auth`, `/database`, `/redis`, `/google`, `/llm`, `/cloudinary`, `/otel`, `/databricks`, `/vite`, `/service-urls`, `/recommendation`, `/mcp`, `/agent-queue`, `/outbox`, `/docker`, `/shared`), nunca por serviço — uma credencial usada por 2+ serviços (ex.: mesma instância Postgres) vive uma única vez na pasta da tecnologia, não duplicada por repositório.
+
+### Instalar o CLI
+
+```bash
+npm install -g @infisical/cli
+```
+
+> No Windows/Git Bash, o wrapper instalado pelo npm costuma falhar com `Permission denied`. Se isso acontecer, chame o binário direto:
+> `~/AppData/Roaming/npm/node_modules/@infisical/cli/bin/infisical.exe`
+> e rode `export MSYS_NO_PATHCONV=1` antes de qualquer comando com `--path=/...` (senão o Git Bash converte o `/` num caminho de arquivo do Windows).
+
+Depois de instalado, autentique com sua conta pessoal:
+
+```bash
+infisical login
+```
+
+### Adicionar uma variável nova
+
+1. Decida a pasta pela **tecnologia/categoria** que a variável representa (não pelo nome do serviço que vai consumi-la).
+2. Adicione o valor em cada ambiente onde ela se aplica:
+
+```bash
+infisical secrets set "MINHA_CHAVE=valor" \
+  --projectId=2296d19c-5f3b-41e1-afa3-fcde39966a71 \
+  --env=<local|qa|prod> \
+  --path=/<pasta>
+```
+
+3. O `.env.example` do repositório deve ser atualizado com o nome da variável (sem o valor), documentando que ela existe.
+
+> ⚠️ **QA hoje tem uma particularidade temporária**: por um bug de permissão ainda em investigação numa das Machine Identities, os serviços em QA leem as secrets pela raiz (`--path=/`, não-recursivo) em vez de por pasta. Enquanto isso não for resolvido, replique a variável também na raiz do ambiente `qa`:
+>
+> ```bash
+> infisical secrets set "MINHA_CHAVE=valor" \
+>   --projectId=2296d19c-5f3b-41e1-afa3-fcde39966a71 \
+>   --env=qa \
+>   --path=/
+> ```
+>
+> Depois de adicionar a secret (pasta + raiz em `qa`), é necessário **reiniciar o serviço no Render** — a leitura só acontece no boot do container, não há hot-reload.
+
+### Usar as variáveis localmente
+
+Não é necessário preencher um `.env` na mão. Duas opções:
+
+**Rodar o serviço já com as variáveis injetadas** (recomendado):
+
+```bash
+infisical run \
+  --projectId=2296d19c-5f3b-41e1-afa3-fcde39966a71 \
+  --env=local \
+  --path=/ \
+  --recursive \
+  -- <comando de start do repositório>
+```
+
+**Gerar um `.env` de verdade** (para quem prefere, ex.: IDE que só lê `.env`):
+
+`infisical export` não tem `--recursive` como o `run` — rode um export por pasta e concatene (só as pastas que o repositório realmente consome, ver `.env.example`):
+
+```bash
+for pasta in database redis llm; do
+  infisical export \
+    --projectId=2296d19c-5f3b-41e1-afa3-fcde39966a71 \
+    --env=local \
+    --path=/$pasta \
+    --format=dotenv >> .env
+done
+```
+
 ## Referência
 
 Este documento resume as convenções oficiais de Git da organização. Em caso
