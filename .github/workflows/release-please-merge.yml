@@ -1,0 +1,24 @@
+name: Release Please Merge
+
+on:
+  workflow_call:
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge the release pr if the checkbox targets one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          head_ref=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq '.headRefName')
+          if [[ "$head_ref" != release-please--* ]]; then
+            echo "pr $PR_NUMBER não é uma pr de release, pulando."
+            exit 0
+          fi
+
+          gh pr merge "$PR_NUMBER" --repo "${{ github.repository }}" --squash

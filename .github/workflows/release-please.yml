@@ -14,3 +14,21 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - name: Comment release checkbox on the release pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_number=$(gh pr list --repo "${{ github.repository }}" --base main --state open --json number,headRefName --jq '[.[] | select(.headRefName | startswith("release-please--"))][0].number')
+          if [ -z "$pr_number" ] || [ "$pr_number" == "null" ]; then
+            echo "Nenhuma pr de release aberta, pulando comentário."
+            exit 0
+          fi
+
+          already_commented=$(gh pr view "$pr_number" --repo "${{ github.repository }}" --json comments --jq '[.comments[] | select(.body | contains("Fazer release"))] | length')
+          if [ "$already_commented" != "0" ]; then
+            echo "Comentário já existe, pulando."
+            exit 0
+          fi
+
+          gh pr comment "$pr_number" --repo "${{ github.repository }}" --body $'- [ ] Fazer release\n\nMarque a caixa acima para mergear esta pr e publicar a release.'

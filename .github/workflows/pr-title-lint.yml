@@ -1,0 +1,18 @@
+name: PR Title Lint
+
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check pr title follows the org commit pattern
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [[ ! "$TITLE" =~ ^(feat|fix|ci|chore|docs|refactor|test|perf|build|style):\ [a-z0-9].*$ ]]; then
+            echo "Título da pr fora do padrão: '$TITLE'"
+            echo "Esperado: '{tipo}: {mensagem}' em inglês, tudo minúsculo, sem escopo entre parênteses. Ex: 'feat: add keepalive workflow'"
+            exit 1
+          fi
