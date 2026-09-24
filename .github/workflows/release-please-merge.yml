@@ -37,4 +37,7 @@ jobs:
               ;;
           esac
 
-          gh pr merge "$PR_NUMBER" --repo "${{ github.repository }}" --squash --auto
+          if ! gh pr merge "$PR_NUMBER" --repo "${{ github.repository }}" --squash --auto; then
+            echo "Auto-merge indisponível; tentando squash merge imediato."
+            gh pr merge "$PR_NUMBER" --repo "${{ github.repository }}" --squash
+          fi
