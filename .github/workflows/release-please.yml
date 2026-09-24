@@ -15,7 +15,7 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      - name: Comment release checkbox on the release pr
+      - name: Add release command to the release pr
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -25,10 +25,11 @@ jobs:
             exit 0
           fi
 
-          already_commented=$(gh pr view "$pr_number" --repo "${{ github.repository }}" --json comments --jq '[.comments[] | select(.body | contains("Fazer release"))] | length')
-          if [ "$already_commented" != "0" ]; then
-            echo "Comentário já existe, pulando."
-            exit 0
-          fi
+          body=$'### Release pronta\n\nPara aprovar a publicação, envie um novo comentário com `/release` neste PR.\n\n<!-- release-please-command -->'
+          comment_id=$(gh api "repos/${{ github.repository }}/issues/$pr_number/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-please-command -->") or contains("Fazer release")) | .id' | head -n 1)
 
-          gh pr comment "$pr_number" --repo "${{ github.repository }}" --body $'- [ ] Fazer release\n\nMarque a caixa acima para mergear esta pr e publicar a release.'
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$comment_id" -f body="$body"
+          else
+            gh pr comment "$pr_number" --repo "${{ github.repository }}" --body "$body"
+          fi

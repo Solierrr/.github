@@ -11,8 +11,8 @@ jobs:
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: |
-          if [[ ! "$TITLE" =~ ^((feat|fix|ci|chore|docs|refactor|test|perf|build|style):\ [a-z0-9].*|chore\(sync\):\ [a-z0-9].*)$ ]]; then
+          if [[ ! "$TITLE" =~ ^((feat|fix|ci|chore|docs|refactor|test|perf|build|style):\ [a-z0-9].*|chore\((sync|main)\):\ [a-z0-9].*)$ ]]; then
             echo "Título da pr fora do padrão: '$TITLE'"
-            echo "Esperado: '{tipo}: {mensagem}' em inglês, tudo minúsculo e sem escopo; a única exceção é a automação 'chore(sync): {mensagem}'."
+            echo "Esperado: '{tipo}: {mensagem}' em inglês, tudo minúsculo e sem escopo; as exceções de automação são 'chore(sync): {mensagem}' e 'chore(main): {mensagem}'."
             exit 1
           fi

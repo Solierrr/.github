@@ -10,15 +10,31 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - name: Merge the release pr if the checkbox targets one
+      - name: Merge an authorized release command
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.issue.number }}
+          ACTOR: ${{ github.event.sender.login }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
+          if [[ "$COMMENT_BODY" != "/release" ]]; then
+            echo "Comentário não é o comando de release, pulando."
+            exit 0
+          fi
+
           head_ref=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq '.headRefName')
           if [[ "$head_ref" != release-please--* ]]; then
             echo "pr $PR_NUMBER não é uma pr de release, pulando."
             exit 0
           fi
 
-          gh pr merge "$PR_NUMBER" --repo "${{ github.repository }}" --squash
+          permission=$(gh api "repos/${{ github.repository }}/collaborators/$ACTOR/permission" --jq '.permission')
+          case "$permission" in
+            admin|maintain|write) ;;
+            *)
+              echo "$ACTOR não tem permissão para publicar uma release."
+              exit 1
+              ;;
+          esac
+
+          gh pr merge "$PR_NUMBER" --repo "${{ github.repository }}" --squash --auto
