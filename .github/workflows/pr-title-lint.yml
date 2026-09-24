@@ -11,8 +11,8 @@ jobs:
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: |
-          if [[ ! "$TITLE" =~ ^(feat|fix|ci|chore|docs|refactor|test|perf|build|style):\ [a-z0-9].*$ ]]; then
+          if [[ ! "$TITLE" =~ ^((feat|fix|ci|chore|docs|refactor|test|perf|build|style):\ [a-z0-9].*|chore\(sync\):\ [a-z0-9].*)$ ]]; then
             echo "Título da pr fora do padrão: '$TITLE'"
-            echo "Esperado: '{tipo}: {mensagem}' em inglês, tudo minúsculo, sem escopo entre parênteses. Ex: 'feat: add keepalive workflow'"
+            echo "Esperado: '{tipo}: {mensagem}' em inglês, tudo minúsculo e sem escopo; a única exceção é a automação 'chore(sync): {mensagem}'."
             exit 1
           fi

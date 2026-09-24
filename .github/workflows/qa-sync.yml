@@ -22,33 +22,29 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           body=$(printf '%s\n' \
-            '> ⚠️ Esta PR foi aberta automaticamente pelo workflow `qa-sync`. Não edite a descrição manualmente - ela é sobrescrita na próxima sincronização.' \
-            '' \
             '## Objetivo' \
             '' \
-            'Sincronizar main para qa, mantendo o ambiente de QA alinhado com o que já foi mergeado em main.' \
+            'Manter qa alinhada com as alterações já integradas em main.' \
             '' \
             '## Alterações' \
             '' \
-            'Tudo que já está em main e ainda não chegou em qa.' \
+            'Esta PR reúne somente commits presentes em main e ainda ausentes em qa; não introduz mudanças independentes.' \
             '' \
             '## Recursos impactados' \
             '' \
-            'Nenhum diretamente - esta PR só atualiza a branch qa. Sem impacto até ela ser mergeada.' \
+            'Após o merge, o ambiente de QA passa a conter as mesmas alterações já aprovadas em main.' \
             '' \
             '## Rollback' \
             '' \
-            'Fechar esta PR sem mergear.' \
+            'Fechar esta PR sem mergear mantém qa no estado atual.' \
             '' \
             '## Como validar' \
             '' \
-            'Revisar o diff antes de aprovar.' \
-            '' \
-            'Closes #')
+            'Confirmar que o diff contém apenas alterações esperadas de main e que os checks obrigatórios passaram.')
 
           gh pr create \
             --base qa \
             --head main \
-            --title "`[AUTO]` chore: sync main into qa" \
+            --title "chore(sync): synchronize main into qa" \
             --body "$body" \
             || echo "PR já existe ou não há mudanças a serem feitas."
