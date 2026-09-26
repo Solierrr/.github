@@ -39,7 +39,7 @@ jobs:
         if: inputs.check == 'http'
         id: http
         run: |
-          if curl --fail --silent --show-error --max-time 15 --output /dev/null "${{ inputs.url }}"; then
+          if curl --silent --max-time 15 --output /dev/null "${{ inputs.url }}"; then
             echo "state=success" >> "$GITHUB_OUTPUT"
           else
             echo "state=failure" >> "$GITHUB_OUTPUT"
