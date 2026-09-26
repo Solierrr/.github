@@ -58,7 +58,7 @@ jobs:
         if: inputs.check == 'gcloud-cluster'
         id: state
         run: |
-          active=$(curl -fsSL "https://raw.githubusercontent.com/Solierrr/infra-platform/main/cluster-state.json" 2>/dev/null | jq -r '.active // true' 2>/dev/null)
+          active=$(curl -fsSL "https://raw.githubusercontent.com/Solierrr/infra-platform/main/ephemerality.json" 2>/dev/null | jq -r '.active // true' 2>/dev/null)
           if [ -z "$active" ]; then
             active=true
           fi
@@ -127,7 +127,7 @@ jobs:
 
           description="Verificação automática de disponibilidade"
           if [ "$STATE" = "inactive" ]; then
-            description="Cluster efêmero desligado de propósito (cluster-state.json)"
+            description="Cluster efêmero desligado de propósito (ephemerality.json)"
           fi
 
           status_body=$(jq -n --arg state "$STATE" --arg desc "$description" '{state: $state, description: $desc}')
