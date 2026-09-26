@@ -58,7 +58,7 @@ jobs:
         if: inputs.check == 'gcloud-cluster'
         id: state
         run: |
-          active=$(curl -fsSL "https://raw.githubusercontent.com/Solierrr/infra-platform/main/ephemerality.json" 2>/dev/null | jq -r '.active // true' 2>/dev/null)
+          active=$(curl -fsSL "https://raw.githubusercontent.com/Solierrr/infra-platform/main/ephemerality.json" 2>/dev/null | jq -r 'if .active == null then true else .active end' 2>/dev/null)
           if [ -z "$active" ]; then
             active=true
           fi
