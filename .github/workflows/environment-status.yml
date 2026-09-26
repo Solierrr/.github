@@ -40,12 +40,12 @@ jobs:
         id: http
         run: |
           ok=1
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             if curl --silent --max-time 30 --output /dev/null "${{ inputs.url }}"; then
               ok=0
               break
             fi
-            sleep 10
+            sleep 15
           done
 
           if [ "$ok" -eq 0 ]; then
@@ -54,18 +54,28 @@ jobs:
             echo "state=failure" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Authenticate to GCP
+      - name: Check cluster active flag
         if: inputs.check == 'gcloud-cluster'
+        id: state
+        run: |
+          active=$(curl -fsSL "https://raw.githubusercontent.com/Solierrr/infra-platform/main/cluster-state.json" 2>/dev/null | jq -r '.active // true' 2>/dev/null)
+          if [ -z "$active" ]; then
+            active=true
+          fi
+          echo "active=$active" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to GCP
+        if: inputs.check == 'gcloud-cluster' && steps.state.outputs.active == 'true'
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up gcloud
-        if: inputs.check == 'gcloud-cluster'
+        if: inputs.check == 'gcloud-cluster' && steps.state.outputs.active == 'true'
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Cluster check
-        if: inputs.check == 'gcloud-cluster'
+        if: inputs.check == 'gcloud-cluster' && steps.state.outputs.active == 'true'
         id: gcloud
         run: |
           status=$(gcloud container clusters describe "${{ inputs.gcp_cluster_name }}" \
@@ -79,10 +89,26 @@ jobs:
             echo "state=failure" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve final state
+        id: final
+        env:
+          CHECK: ${{ inputs.check }}
+          CLUSTER_ACTIVE: ${{ steps.state.outputs.active }}
+          HTTP_STATE: ${{ steps.http.outputs.state }}
+          GCLOUD_STATE: ${{ steps.gcloud.outputs.state }}
+        run: |
+          if [ "$CHECK" = "gcloud-cluster" ] && [ "$CLUSTER_ACTIVE" = "false" ]; then
+            echo "state=inactive" >> "$GITHUB_OUTPUT"
+          elif [ -n "$GCLOUD_STATE" ]; then
+            echo "state=$GCLOUD_STATE" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=$HTTP_STATE" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Post deployment status
         env:
           GH_TOKEN: ${{ github.token }}
-          STATE: ${{ steps.http.outputs.state || steps.gcloud.outputs.state }}
+          STATE: ${{ steps.final.outputs.state }}
           ENVIRONMENT: ${{ inputs.environment }}
           ENV_URL: ${{ inputs.url }}
         run: |
@@ -99,7 +125,12 @@ jobs:
 
           deployment_id=$(echo "$deploy_body" | gh api "repos/${{ github.repository }}/deployments" --input - --jq '.id')
 
-          status_body=$(jq -n --arg state "$STATE" --arg desc "Verificação automática de disponibilidade" '{state: $state, description: $desc}')
+          description="Verificação automática de disponibilidade"
+          if [ "$STATE" = "inactive" ]; then
+            description="Cluster efêmero desligado de propósito (cluster-state.json)"
+          fi
+
+          status_body=$(jq -n --arg state "$STATE" --arg desc "$description" '{state: $state, description: $desc}')
           if [ -n "$ENV_URL" ]; then
             status_body=$(echo "$status_body" | jq --arg url "$ENV_URL" '. + {environment_url: $url}')
           fi
@@ -108,8 +139,8 @@ jobs:
 
       - name: Fail if unavailable
         env:
-          STATE: ${{ steps.http.outputs.state || steps.gcloud.outputs.state }}
+          STATE: ${{ steps.final.outputs.state }}
         run: |
-          if [ "$STATE" != "success" ]; then
+          if [ "$STATE" != "success" ] && [ "$STATE" != "inactive" ]; then
             exit 1
           fi
