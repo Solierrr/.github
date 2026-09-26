@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       environment:
-        description: "GitHub Environment name to report against (e.g. QA, Production)"
+        description: "GitHub Environment name to report against (e.g. QA, PROD)"
         required: true
         type: string
       check:
@@ -113,7 +113,7 @@ jobs:
           ENV_URL: ${{ inputs.url }}
         run: |
           production_flag=false
-          if [ "$ENVIRONMENT" = "Production" ]; then
+          if [ "$ENVIRONMENT" = "PROD" ]; then
             production_flag=true
           fi
 
