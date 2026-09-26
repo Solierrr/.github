@@ -40,12 +40,12 @@ jobs:
         id: http
         run: |
           ok=1
-          for attempt in 1 2 3 4 5; do
+          for attempt in 1 2 3 4 5 6 7 8; do
             if curl --silent --max-time 30 --output /dev/null "${{ inputs.url }}"; then
               ok=0
               break
             fi
-            sleep 15
+            sleep 20
           done
 
           if [ "$ok" -eq 0 ]; then
