@@ -1,0 +1,106 @@
+name: Environment Status
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "GitHub Environment name to report against (e.g. QA, Production)"
+        required: true
+        type: string
+      check:
+        description: "How to determine status: 'http' or 'gcloud-cluster'"
+        required: true
+        type: string
+      url:
+        description: "Public URL to check (required when check == http; also recorded as the environment_url)"
+        required: false
+        type: string
+      gcp_project_id:
+        required: false
+        type: string
+      gcp_cluster_name:
+        required: false
+        type: string
+      gcp_zone:
+        required: false
+        type: string
+    secrets:
+      GCP_SA_KEY:
+        required: false
+
+permissions:
+  deployments: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: HTTP check
+        if: inputs.check == 'http'
+        id: http
+        run: |
+          if curl --fail --silent --show-error --max-time 15 --output /dev/null "${{ inputs.url }}"; then
+            echo "state=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=failure" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Authenticate to GCP
+        if: inputs.check == 'gcloud-cluster'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        if: inputs.check == 'gcloud-cluster'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Cluster check
+        if: inputs.check == 'gcloud-cluster'
+        id: gcloud
+        run: |
+          status=$(gcloud container clusters describe "${{ inputs.gcp_cluster_name }}" \
+            --project "${{ inputs.gcp_project_id }}" \
+            --zone "${{ inputs.gcp_zone }}" \
+            --format="value(status)" 2>/dev/null || echo "NOT_FOUND")
+
+          if [ "$status" = "RUNNING" ]; then
+            echo "state=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=failure" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post deployment status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATE: ${{ steps.http.outputs.state || steps.gcloud.outputs.state }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          ENV_URL: ${{ inputs.url }}
+        run: |
+          production_flag=false
+          if [ "$ENVIRONMENT" = "Production" ]; then
+            production_flag=true
+          fi
+
+          deploy_body=$(jq -n \
+            --arg ref "$GITHUB_SHA" \
+            --arg env "$ENVIRONMENT" \
+            --argjson prod "$production_flag" \
+            '{ref: $ref, environment: $env, auto_merge: false, required_contexts: [], production_environment: $prod, transient_environment: false}')
+
+          deployment_id=$(echo "$deploy_body" | gh api "repos/${{ github.repository }}/deployments" --input - --jq '.id')
+
+          status_body=$(jq -n --arg state "$STATE" --arg desc "Verificação automática de disponibilidade" '{state: $state, description: $desc}')
+          if [ -n "$ENV_URL" ]; then
+            status_body=$(echo "$status_body" | jq --arg url "$ENV_URL" '. + {environment_url: $url}')
+          fi
+
+          echo "$status_body" | gh api "repos/${{ github.repository }}/deployments/$deployment_id/statuses" --input -
+
+      - name: Fail if unavailable
+        env:
+          STATE: ${{ steps.http.outputs.state || steps.gcloud.outputs.state }}
+        run: |
+          if [ "$STATE" != "success" ]; then
+            exit 1
+          fi
