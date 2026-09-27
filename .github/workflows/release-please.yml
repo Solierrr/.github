@@ -52,7 +52,7 @@ jobs:
 
           release_pr_url="https://github.com/${{ github.repository }}/pull/$pr_number"
           body=$(printf '%s\n' \
-            "## Release" \
+            "## Release semântico automático" \
             "" \
             "Uma pull request de release foi aberta ou atualizada: #$pr_number. Marque a caixa abaixo para aprovar a publicação ou, se achar necessário, acesse diretamente a [pull request da release]($release_pr_url)." \
             "" \
