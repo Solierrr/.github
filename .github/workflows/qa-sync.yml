@@ -24,23 +24,23 @@ jobs:
           body=$(printf '%s\n' \
             '## Objetivo' \
             '' \
-            'Manter qa alinhada com as alterações já integradas em main.' \
+            'Manter o ambiente de QA alinhado com o que já foi integrado em main, evitando que a branch qa fique defasada em relação ao que está de fato aprovado e mergeado.' \
             '' \
             '## Alterações' \
             '' \
-            'Esta PR reúne somente commits presentes em main e ainda ausentes em qa; não introduz mudanças independentes.' \
+            'Esta PR reúne exclusivamente os commits que já existem em main e ainda não chegaram em qa; ela não introduz nenhuma mudança de conteúdo própria, é só uma sincronização mecânica entre as duas branches.' \
             '' \
             '## Recursos impactados' \
             '' \
-            'Após o merge, o ambiente de QA passa a conter as mesmas alterações já aprovadas em main.' \
+            'Depois do merge, o ambiente de QA passa a rodar exatamente o mesmo código que já está validado em main, então qualquer serviço fazendo deploy a partir de qa reflete essa atualização.' \
             '' \
             '## Rollback' \
             '' \
-            'Fechar esta PR sem mergear mantém qa no estado atual.' \
+            'Basta fechar esta PR sem mergear para manter qa no estado atual; como nenhuma mudança é aplicada até o merge, não há nada pra reverter depois disso.' \
             '' \
             '## Como validar' \
             '' \
-            'Confirmar que o diff contém apenas alterações esperadas de main e que os checks obrigatórios passaram.')
+            'Confirme que o diff mostra apenas os commits esperados vindos de main e que os checks obrigatórios da PR passaram antes de mergear.')
 
           gh pr create \
             --base qa \
