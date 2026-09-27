@@ -8,6 +8,11 @@ on:
         type: string
         required: false
         default: ""
+      auto-merge:
+        description: "Solicita o auto-merge da PR de sync depois do clique na checkbox"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -28,6 +33,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_PR_NUMBER: ${{ inputs.source-pr-number }}
+          AUTO_MERGE: ${{ inputs.auto-merge }}
         run: |
           body=$(printf '%s\n' \
             '## Objetivo' \
@@ -69,22 +75,67 @@ jobs:
           fi
 
       - name: Update the checkbox comment on the source pull request
-        if: inputs.source-pr-number != '' && steps.sync.outputs.pr_number != ''
+        if: inputs.source-pr-number != ''
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_PR_NUMBER: ${{ inputs.source-pr-number }}
           SYNC_PR_NUMBER: ${{ steps.sync.outputs.pr_number }}
+          AUTO_MERGE: ${{ inputs.auto-merge }}
         run: |
-          sync_pr_url="https://github.com/${{ github.repository }}/pull/$SYNC_PR_NUMBER"
-          body=$(printf '%s\n' \
-            "## Sincronização de branches" \
-            "" \
-            "A pull request de sincronização foi aberta: [pull request da sincronização]($sync_pr_url). Marque a caixa abaixo para mergeá-la automaticamente e atualizar a branch \`qa\` — se houver conflito com \`main\`, um comentário aqui avisa que não deu pra mergear sozinho." \
-            "" \
-            "- [x] **Sincronizar automaticamente a branch \`qa\`**" \
-            "- [ ] **Mergear automaticamente a pull request de sincronização**" \
-            "" \
-            "<!-- qa-sync-source-command -->")
+          if [ -z "$SYNC_PR_NUMBER" ] || [ "$SYNC_PR_NUMBER" = "null" ]; then
+            ahead_by=$(gh api "repos/${{ github.repository }}/compare/qa...main" --jq '.ahead_by')
+            if [ "$ahead_by" = "0" ]; then
+              status_line="A branch \`qa\` já está sincronizada com \`main\`; não havia PR para mergear."
+            else
+              status_line="Não foi possível localizar ou criar a PR de sincronização. Confira a execução do workflow."
+            fi
+            body=$(printf '%s\n' \
+              "## Sincronização de branches" \
+              "" \
+              "$status_line" \
+              "" \
+              "- [x] **Sincronizar automaticamente a branch \`qa\`**" \
+              "" \
+              "<!-- qa-sync-source-command -->")
+          elif [ "$AUTO_MERGE" = "true" ]; then
+            sync_pr_url="https://github.com/${{ github.repository }}/pull/$SYNC_PR_NUMBER"
+            if gh pr merge "$SYNC_PR_NUMBER" --repo "${{ github.repository }}" --squash --auto; then
+              merged_at=$(gh pr view "$SYNC_PR_NUMBER" --repo "${{ github.repository }}" --json mergedAt --jq '.mergedAt // empty')
+              if [ -n "$merged_at" ]; then
+                status_line="A sincronização foi concluída e a branch \`qa\` já está atualizada. [PR da sincronização]($sync_pr_url)."
+              else
+                status_line="O auto-merge foi solicitado; o GitHub concluirá a sincronização quando os checks e aprovações exigidos passarem. [PR da sincronização]($sync_pr_url)."
+              fi
+            else
+              mergeable=$(gh pr view "$SYNC_PR_NUMBER" --repo "${{ github.repository }}" --json mergeable --jq '.mergeable')
+              merge_state=$(gh pr view "$SYNC_PR_NUMBER" --repo "${{ github.repository }}" --json mergeStateStatus --jq '.mergeStateStatus')
+              if [ "$mergeable" = "CONFLICTING" ]; then
+                status_line="Não foi possível sincronizar automaticamente por conflito entre \`main\` e \`qa\`. Resolva o conflito na [PR da sincronização]($sync_pr_url)."
+              else
+                status_line="O GitHub não aceitou o auto-merge (estado: $merge_state). Confira os checks e as regras na [PR da sincronização]($sync_pr_url)."
+              fi
+            fi
+
+            body=$(printf '%s\n' \
+              "## Sincronização de branches" \
+              "" \
+              "$status_line" \
+              "" \
+              "- [x] **Sincronizar automaticamente a branch \`qa\`**" \
+              "" \
+              "<!-- qa-sync-source-command -->")
+          else
+            sync_pr_url="https://github.com/${{ github.repository }}/pull/$SYNC_PR_NUMBER"
+            body=$(printf '%s\n' \
+              "## Sincronização de branches" \
+              "" \
+              "A pull request de sincronização foi aberta: [pull request da sincronização]($sync_pr_url). Marque a caixa abaixo para mergeá-la automaticamente e atualizar a branch \`qa\` — se houver conflito com \`main\`, um comentário aqui avisa que não deu pra mergear sozinho." \
+              "" \
+              "- [x] **Sincronizar automaticamente a branch \`qa\`**" \
+              "- [ ] **Mergear automaticamente a pull request de sincronização**" \
+              "" \
+              "<!-- qa-sync-source-command -->")
+          fi
 
           comment_id=$(gh api "repos/${{ github.repository }}/issues/$SOURCE_PR_NUMBER/comments" --paginate --jq '.[] | select(.body | contains("<!-- qa-sync-source-command -->")) | .id' | head -n 1)
 

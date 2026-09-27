@@ -2,21 +2,41 @@ name: Release Please Merge
 
 on:
   workflow_call:
+    inputs:
+      update-source-status:
+        description: "Atualiza o comentario de origem e finaliza a release no piloto"
+        type: boolean
+        required: false
+        default: false
+    outputs:
+      release-pr-number:
+        description: "Numero da pull request de release encontrada"
+        value: ${{ jobs.merge.outputs.release-pr-number }}
+      merge-requested:
+        description: "Indica se o GitHub aceitou a solicitacao de merge"
+        value: ${{ jobs.merge.outputs.merge-requested }}
 
 jobs:
   merge:
     runs-on: ubuntu-latest
+    outputs:
+      release-pr-number: ${{ steps.merge.outputs.release-pr-number }}
+      merge-requested: ${{ steps.merge.outputs.merge-requested }}
     permissions:
       contents: write
       pull-requests: write
     steps:
       - name: Merge an authorized release command
+        id: merge
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.issue.number }}
           ACTOR: ${{ github.event.sender.login }}
           COMMENT_BODY: ${{ github.event.comment.body }}
+          UPDATE_SOURCE_STATUS: ${{ inputs.update-source-status }}
         run: |
+          MERGE_REQUESTED=false
+
           if [[ "$COMMENT_BODY" == "/release" ]]; then
             head_ref=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq '.headRefName')
             if [[ "$head_ref" != release-please--* ]]; then
@@ -36,6 +56,9 @@ jobs:
             exit 0
           fi
 
+          RELEASE_PR_NUMBER="$PR_NUMBER"
+          echo "release-pr-number=$RELEASE_PR_NUMBER" >> "$GITHUB_OUTPUT"
+
           permission=$(gh api "repos/${{ github.repository }}/collaborators/$ACTOR/permission" --jq '.permission')
           case "$permission" in
             admin|maintain|write) ;;
@@ -45,7 +68,67 @@ jobs:
               ;;
           esac
 
-          if ! gh pr merge "$PR_NUMBER" --repo "${{ github.repository }}" --squash --auto; then
-            echo "Auto-merge indisponível; tentando squash merge imediato."
-            gh pr merge "$PR_NUMBER" --repo "${{ github.repository }}" --squash
+          update_source_comment() {
+            local status_line="$1"
+            local body comment_id
+            body=$(printf '%s\n' \
+              "## Release semântico automático" \
+              "" \
+              "$status_line" \
+              "" \
+              "<!-- release-please-source-command -->")
+            comment_id=$(gh api "repos/${{ github.repository }}/issues/$SOURCE_PR_NUMBER/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-please-source-command -->")) | .id' | head -n 1)
+            if [ -n "$comment_id" ]; then
+              gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$comment_id" -f body="$body"
+            else
+              gh pr comment "$SOURCE_PR_NUMBER" --repo "${{ github.repository }}" --body "$body"
+            fi
+          }
+
+          if [ "$UPDATE_SOURCE_STATUS" = "true" ]; then
+            command_comment=$(gh api "repos/${{ github.repository }}/issues/$RELEASE_PR_NUMBER/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-please-command -->")) | .body' | head -n 1)
+            command_comment_id=$(gh api "repos/${{ github.repository }}/issues/$RELEASE_PR_NUMBER/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-please-command -->")) | .id' | head -n 1)
+            if [ -z "$command_comment_id" ]; then
+              command_comment=$'## Release pronta\n\nPara aprovar a publicação, envie um novo comentário com `/release` neste PR.\n\n<!-- release-please-command -->'
+              gh pr comment "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --body "$command_comment"
+              command_comment_id=$(gh api "repos/${{ github.repository }}/issues/$RELEASE_PR_NUMBER/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-please-command -->")) | .id' | head -n 1)
+            fi
+
+            if ! grep -Fq '<!-- release-please-auto-publish-requested -->' <<< "$command_comment"; then
+              command_comment+=$'\n<!-- release-please-auto-publish-requested -->'
+            fi
+            if [ -n "${SOURCE_PR_NUMBER:-}" ]; then
+              source_marker="<!-- release-please-auto-publish-source:$SOURCE_PR_NUMBER -->"
+              if ! grep -Fq "$source_marker" <<< "$command_comment"; then
+                command_comment+=$'\n'"$source_marker"
+              fi
+            fi
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$command_comment_id" -f body="$command_comment"
           fi
+
+          if gh pr merge "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --squash --auto; then
+            MERGE_REQUESTED=true
+            if [ "$UPDATE_SOURCE_STATUS" = "true" ] && [ -n "${SOURCE_PR_NUMBER:-}" ]; then
+              release_pr_url="https://github.com/${{ github.repository }}/pull/$RELEASE_PR_NUMBER"
+              update_source_comment "A publicação automática foi solicitada. O merge aguarda os checks e aprovações exigidos: [PR da release]($release_pr_url)."
+            fi
+          elif [ "$UPDATE_SOURCE_STATUS" != "true" ]; then
+            echo "Auto-merge indisponível; tentando squash merge imediato."
+            gh pr merge "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --squash
+            MERGE_REQUESTED=true
+          elif gh pr merge "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --squash; then
+            MERGE_REQUESTED=true
+            if [ -n "${SOURCE_PR_NUMBER:-}" ]; then
+              release_pr_url="https://github.com/${{ github.repository }}/pull/$RELEASE_PR_NUMBER"
+              update_source_comment "A PR da release foi mergeada; o workflow vai concluir a publicação: [PR da release]($release_pr_url)."
+            fi
+          else
+            merge_state=$(gh pr view "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --json mergeStateStatus --jq '.mergeStateStatus')
+            if [ -n "${SOURCE_PR_NUMBER:-}" ]; then
+              release_pr_url="https://github.com/${{ github.repository }}/pull/$RELEASE_PR_NUMBER"
+              update_source_comment "O GitHub não aceitou o auto-merge (estado: $merge_state). Confira os checks e as aprovações na [PR da release]($release_pr_url)."
+            fi
+          fi
+
+          echo "release-pr-number=$RELEASE_PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "merge-requested=$MERGE_REQUESTED" >> "$GITHUB_OUTPUT"
