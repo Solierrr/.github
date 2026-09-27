@@ -51,9 +51,7 @@ jobs:
             'Confirme que o diff mostra apenas os commits esperados vindos de main e que os checks obrigatórios da PR passaram antes de mergear.')
 
           if [ -n "$SOURCE_PR_NUMBER" ]; then
-            body="$body
-
-Relacionado a #$SOURCE_PR_NUMBER."
+            body=$(printf '%s\n\nRelacionado a #%s.' "$body" "$SOURCE_PR_NUMBER")
           fi
 
           gh pr create \
