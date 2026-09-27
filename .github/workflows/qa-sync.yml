@@ -50,10 +50,6 @@ jobs:
             '' \
             'Confirme que o diff mostra apenas os commits esperados vindos de main e que os checks obrigatórios da PR passaram antes de mergear.')
 
-          if [ -n "$SOURCE_PR_NUMBER" ]; then
-            body=$(printf '%s\n\nRelacionado a #%s.' "$body" "$SOURCE_PR_NUMBER")
-          fi
-
           gh pr create \
             --base qa \
             --head main \
@@ -63,6 +59,14 @@ jobs:
 
           pr_number=$(gh pr list --repo "${{ github.repository }}" --base qa --head main --state open --json number --jq '.[0].number')
           echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$SOURCE_PR_NUMBER" ] && [ -n "$pr_number" ]; then
+            current_body=$(gh pr view "$pr_number" --repo "${{ github.repository }}" --json body --jq '.body')
+            if ! grep -q "Relacionado a #$SOURCE_PR_NUMBER\." <<< "$current_body"; then
+              updated_body=$(printf '%s\n\nRelacionado a #%s.' "$current_body" "$SOURCE_PR_NUMBER")
+              gh pr edit "$pr_number" --repo "${{ github.repository }}" --body "$updated_body"
+            fi
+          fi
 
       - name: Update the checkbox comment on the source pull request
         if: inputs.source-pr-number != '' && steps.sync.outputs.pr_number != ''
