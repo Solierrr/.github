@@ -17,14 +17,22 @@ jobs:
           ACTOR: ${{ github.event.sender.login }}
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
-          if [[ "$COMMENT_BODY" != "/release" ]]; then
+          if [[ "$COMMENT_BODY" == "/release" ]]; then
+            head_ref=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq '.headRefName')
+            if [[ "$head_ref" != release-please--* ]]; then
+              echo "pr $PR_NUMBER não é uma pr de release, pulando."
+              exit 0
+            fi
+          elif [[ "$COMMENT_BODY" == *"- [x] **Clique aqui para publicar a release automaticamente!**"* ]]; then
+            # Comando via checkbox: postado na PR original, não na PR de release em si.
+            # Descobre a PR de release atualmente aberta pra mergear.
+            PR_NUMBER=$(gh pr list --repo "${{ github.repository }}" --base main --state open --json number,headRefName --jq '[.[] | select(.headRefName | startswith("release-please--"))][0].number')
+            if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" == "null" ]; then
+              echo "Nenhuma pr de release aberta, pulando."
+              exit 0
+            fi
+          else
             echo "Comentário não é o comando de release, pulando."
-            exit 0
-          fi
-
-          head_ref=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq '.headRefName')
-          if [[ "$head_ref" != release-please--* ]]; then
-            echo "pr $PR_NUMBER não é uma pr de release, pulando."
             exit 0
           fi
 

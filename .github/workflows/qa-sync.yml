@@ -79,9 +79,10 @@ jobs:
           body=$(printf '%s\n' \
             "## Sincronização de branches" \
             "" \
-            "Essa pull request foi mergeada diretamente na branch \`main\`, portanto a branch \`qa\` ficará desatualizada caso ela não seja sincronizada. Marque a caixa abaixo para sincronizar automaticamente a branch \`qa\` ou, se achar necessário, acesse diretamente a [pull request da sincronização]($sync_pr_url)." \
+            "A pull request de sincronização foi aberta: [pull request da sincronização]($sync_pr_url). Marque a caixa abaixo para mergeá-la automaticamente e atualizar a branch \`qa\` — se houver conflito com \`main\`, um comentário aqui avisa que não deu pra mergear sozinho." \
             "" \
             "- [x] **Sincronizar automaticamente a branch \`qa\`**" \
+            "- [ ] **Mergear automaticamente a pull request de sincronização**" \
             "" \
             "<!-- qa-sync-source-command -->")
 
