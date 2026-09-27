@@ -15,14 +15,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           body=$(printf '%s\n' \
-            "## Pull request aberta" \
+            "## Sua pull request foi aberta com sucesso!" \
             "" \
             "Olá! Um aviso rápido: depois de mergear, continue acompanhando esta conversa. Alguns comentários automáticos podem aparecer aqui para alinhar o resto do fluxo." \
             "" \
-            "## O que pode acontecer depois de mergear" \
+            "## O que poderá acontecer após o merge?" \
             "" \
-            "- Sincronização com \`qa\`: se esta pull request for mergeada direto em \`main\`, aparece um checkbox aqui para disparar a sincronização com um clique." \
-            "- Imagem Docker publicada: se o repositório tiver \`Dockerfile\`, a imagem sobe sozinha e um comentário aqui traz o link e o digest." \
-            "- Release: se os commits desta pull request contiverem \`feat\` ou \`fix\`, uma pull request de release é aberta ou atualizada, e um comentário aqui linka para ela com um checkbox para aprovar a publicação.")
+            "- **Sincronização com \`qa\`**: se esta pull request for mergeada direto em \`main\`, aparece um checkbox aqui para disparar a sincronização com um clique." \
+            "" \
+            "- **Imagem Docker publicada**: se o repositório tiver \`Dockerfile\`, a imagem sobe sozinha e um comentário aqui traz o link e o digest." \
+            "" \
+            "- **Release automático**: se os commits desta pull request contiverem \`feat\` ou \`fix\`, uma pull request de release será aberta ou atualizada, e um comentário aqui irá referenciá-la com um checkbox para aprovar a sua publicação." \
+            "" \
+            "Após o merge é importante que continue aqui para alinhar esses pontos e não deixar o repositório desatualizado!")
 
           gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body "$body"

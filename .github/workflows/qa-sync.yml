@@ -64,16 +64,27 @@ jobs:
           pr_number=$(gh pr list --repo "${{ github.repository }}" --base qa --head main --state open --json number --jq '.[0].number')
           echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
 
-      - name: Comment back on the source pull request
+      - name: Update the checkbox comment on the source pull request
         if: inputs.source-pr-number != '' && steps.sync.outputs.pr_number != ''
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_PR_NUMBER: ${{ inputs.source-pr-number }}
           SYNC_PR_NUMBER: ${{ steps.sync.outputs.pr_number }}
         run: |
+          sync_pr_url="https://github.com/${{ github.repository }}/pull/$SYNC_PR_NUMBER"
           body=$(printf '%s\n' \
-            '## Sincronização disparada' \
-            '' \
-            "A sincronização foi disparada. Acompanhe em #$SYNC_PR_NUMBER.")
+            "## Sincronização de branches" \
+            "" \
+            "Essa pull request foi mergeada diretamente na branch \`main\`, portanto a branch \`qa\` ficará desatualizada caso ela não seja sincronizada. Marque a caixa abaixo para sincronizar automaticamente a branch \`qa\` ou, se achar necessário, acesse diretamente a [pull request da sincronização]($sync_pr_url)." \
+            "" \
+            "- [x] **Sincronizar automaticamente a branch \`qa\`**" \
+            "" \
+            "<!-- qa-sync-source-command -->")
 
-          gh pr comment "$SOURCE_PR_NUMBER" --repo "${{ github.repository }}" --body "$body"
+          comment_id=$(gh api "repos/${{ github.repository }}/issues/$SOURCE_PR_NUMBER/comments" --paginate --jq '.[] | select(.body | contains("<!-- qa-sync-source-command -->")) | .id' | head -n 1)
+
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$comment_id" -f body="$body"
+          else
+            gh pr comment "$SOURCE_PR_NUMBER" --repo "${{ github.repository }}" --body "$body"
+          fi

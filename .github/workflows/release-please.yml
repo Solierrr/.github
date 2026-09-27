@@ -50,12 +50,13 @@ jobs:
             exit 0
           fi
 
+          release_pr_url="https://github.com/${{ github.repository }}/pull/$pr_number"
           body=$(printf '%s\n' \
             "## Release" \
             "" \
-            "Uma pull request de release foi aberta ou atualizada: #$pr_number. Marque a caixa abaixo para aprovar a publicação." \
+            "Uma pull request de release foi aberta ou atualizada: #$pr_number. Marque a caixa abaixo para aprovar a publicação ou, se achar necessário, acesse diretamente a [pull request da release]($release_pr_url)." \
             "" \
-            "- [ ] Publicar release" \
+            "- [ ] **Clique aqui para publicar a release automaticamente!**" \
             "" \
             "<!-- release-please-source-command -->")
 

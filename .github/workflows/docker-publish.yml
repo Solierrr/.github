@@ -53,10 +53,12 @@ jobs:
           body=$(printf '%s\n' \
             "## Imagem Docker publicada" \
             '' \
-            "A imagem desta pull request foi publicada no Docker Hub." \
+            "A imagem desta pull request foi publicada no [Docker Hub](https://hub.docker.com/repositories/solarianetwork) com sucesso! Ela está disponível na conta \`solarianetwork\` e abaixo estão as informações da imagem." \
             '' \
-            "- Tag: \`solarianetwork/${repo_name}:${{ github.sha }}\`" \
-            "- Digest: \`${{ steps.build.outputs.digest }}\`" \
-            "- Registry: https://hub.docker.com/r/solarianetwork/${repo_name}/tags")
+            "- **Tag**: \`solarianetwork/${repo_name}:${{ github.sha }}\`" \
+            '' \
+            "- **Digest**: \`${{ steps.build.outputs.digest }}\`" \
+            '' \
+            "- **Registry**: https://hub.docker.com/r/solarianetwork/${repo_name}/tags")
 
           gh pr comment "$pr_number" --repo "${{ github.repository }}" --body "$body"
