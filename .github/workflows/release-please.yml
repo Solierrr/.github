@@ -25,11 +25,44 @@ jobs:
             exit 0
           fi
 
-          body=$'### Release pronta\n\nPara aprovar a publicação, envie um novo comentário com `/release` neste PR.\n\n<!-- release-please-command -->'
+          body=$'## Release pronta\n\nPara aprovar a publicação, envie um novo comentário com `/release` neste PR.\n\n<!-- release-please-command -->'
           comment_id=$(gh api "repos/${{ github.repository }}/issues/$pr_number/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-please-command -->") or contains("Fazer release")) | .id' | head -n 1)
 
           if [ -n "$comment_id" ]; then
             gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$comment_id" -f body="$body"
           else
             gh pr comment "$pr_number" --repo "${{ github.repository }}" --body "$body"
+          fi
+
+      - name: Comment on the source pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_number=$(gh pr list --repo "${{ github.repository }}" --base main --state open --json number,headRefName --jq '[.[] | select(.headRefName | startswith("release-please--"))][0].number')
+          if [ -z "$pr_number" ] || [ "$pr_number" == "null" ]; then
+            echo "Nenhuma pr de release aberta, pulando comentário na pr original."
+            exit 0
+          fi
+
+          source_pr=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" --jq '.[0].number')
+          if [ -z "$source_pr" ] || [ "$source_pr" == "null" ]; then
+            echo "Nenhuma pr associada a este commit, pulando comentário."
+            exit 0
+          fi
+
+          body=$(printf '%s\n' \
+            "## Release" \
+            "" \
+            "Uma pull request de release foi aberta ou atualizada: #$pr_number. Marque a caixa abaixo para aprovar a publicação." \
+            "" \
+            "- [ ] Publicar release" \
+            "" \
+            "<!-- release-please-source-command -->")
+
+          comment_id=$(gh api "repos/${{ github.repository }}/issues/$source_pr/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-please-source-command -->")) | .id' | head -n 1)
+
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$comment_id" -f body="$body"
+          else
+            gh pr comment "$source_pr" --repo "${{ github.repository }}" --body "$body"
           fi

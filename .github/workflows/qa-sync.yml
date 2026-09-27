@@ -2,6 +2,12 @@ name: Sync main <> QA
 
 on:
   workflow_call:
+    inputs:
+      source-pr-number:
+        description: "Numero da pull request que disparou a sincronizacao, para referencia cruzada"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -18,8 +24,10 @@ jobs:
           fetch-depth: 0
 
       - name: Create sync PR
+        id: sync
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_PR_NUMBER: ${{ inputs.source-pr-number }}
         run: |
           body=$(printf '%s\n' \
             '## Objetivo' \
@@ -42,9 +50,32 @@ jobs:
             '' \
             'Confirme que o diff mostra apenas os commits esperados vindos de main e que os checks obrigatórios da PR passaram antes de mergear.')
 
+          if [ -n "$SOURCE_PR_NUMBER" ]; then
+            body="$body
+
+Relacionado a #$SOURCE_PR_NUMBER."
+          fi
+
           gh pr create \
             --base qa \
             --head main \
             --title "chore(sync): synchronize main into qa" \
             --body "$body" \
-            || echo "PR já existe ou não há mudanças a serem feitas."
+            2>/dev/null || true
+
+          pr_number=$(gh pr list --repo "${{ github.repository }}" --base qa --head main --state open --json number --jq '.[0].number')
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+
+      - name: Comment back on the source pull request
+        if: inputs.source-pr-number != '' && steps.sync.outputs.pr_number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_PR_NUMBER: ${{ inputs.source-pr-number }}
+          SYNC_PR_NUMBER: ${{ steps.sync.outputs.pr_number }}
+        run: |
+          body=$(printf '%s\n' \
+            '## Sincronização disparada' \
+            '' \
+            "A sincronização foi disparada. Acompanhe em #$SYNC_PR_NUMBER.")
+
+          gh pr comment "$SOURCE_PR_NUMBER" --repo "${{ github.repository }}" --body "$body"

@@ -1,0 +1,28 @@
+name: PR Welcome
+
+on:
+  workflow_call:
+
+permissions:
+  pull-requests: write
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post welcome comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body=$(printf '%s\n' \
+            "## Pull request aberta" \
+            "" \
+            "Olá! Um aviso rápido: depois de mergear, continue acompanhando esta conversa. Alguns comentários automáticos podem aparecer aqui para alinhar o resto do fluxo." \
+            "" \
+            "## O que pode acontecer depois de mergear" \
+            "" \
+            "- Sincronização com \`qa\`: se esta pull request for mergeada direto em \`main\`, aparece um checkbox aqui para disparar a sincronização com um clique." \
+            "- Imagem Docker publicada: se o repositório tiver \`Dockerfile\`, a imagem sobe sozinha e um comentário aqui traz o link e o digest." \
+            "- Release: se os commits desta pull request contiverem \`feat\` ou \`fix\`, uma pull request de release é aberta ou atualizada, e um comentário aqui linka para ela com um checkbox para aprovar a publicação.")
+
+          gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body "$body"

@@ -51,10 +51,12 @@ jobs:
 
           repo_name="${{ github.event.repository.name }}"
           body=$(printf '%s\n' \
-            "🐳 Imagem publicada: \`solarianetwork/${repo_name}:${{ github.sha }}\`" \
+            "## Imagem Docker publicada" \
             '' \
-            "Digest: \`${{ steps.build.outputs.digest }}\`" \
+            "A imagem desta pull request foi publicada no Docker Hub." \
             '' \
-            "Registry: https://hub.docker.com/r/solarianetwork/${repo_name}/tags")
+            "- Tag: \`solarianetwork/${repo_name}:${{ github.sha }}\`" \
+            "- Digest: \`${{ steps.build.outputs.digest }}\`" \
+            "- Registry: https://hub.docker.com/r/solarianetwork/${repo_name}/tags")
 
           gh pr comment "$pr_number" --repo "${{ github.repository }}" --body "$body"
