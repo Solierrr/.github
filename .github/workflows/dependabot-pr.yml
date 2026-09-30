@@ -1,0 +1,74 @@
+name: Dependabot PR
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  structure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ github.token }}
+
+      - name: Structure the pull request body
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          UPDATES: ${{ steps.meta.outputs.updated-dependencies-json }}
+          ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
+        run: |
+          original=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.body // ""')
+
+          if grep -Fq '<!-- dependabot-structured -->' <<< "$original"; then
+            echo "O corpo desta PR já está estruturado, nada a fazer."
+            exit 0
+          fi
+
+          count=$(jq 'length' <<< "$UPDATES")
+          rows=$(jq -r '.[] | "| `\(.dependencyName)` | \(.prevVersion // "-") | \(.newVersion) | \(.updateType | sub("version-update:semver-"; "")) |"' <<< "$UPDATES")
+          notes=$(printf '%s' "$original" | head -c 20000)
+
+          {
+            echo "## Objetivo"
+            echo
+            echo "Manter as dependências do ecossistema \`$ECOSYSTEM\` atualizadas, evitando defasagem e vulnerabilidades conhecidas, reunidas em uma única pull request por semana."
+            echo
+            echo "## Alterações"
+            echo
+            echo "Esta pull request atualiza $count dependência(s):"
+            echo
+            echo "| Dependência | De | Para | Tipo |"
+            echo "|---|---|---|---|"
+            echo "$rows"
+            echo
+            echo "## Recursos impactados"
+            echo
+            echo "Somente manifestos e lockfiles do ecossistema \`$ECOSYSTEM\`; nenhum código de aplicação é alterado por esta PR."
+            echo
+            echo "## Rollback"
+            echo
+            echo "Basta fechar esta PR sem mergear para manter as versões atuais; depois do merge, reverter o commit restaura as versões anteriores."
+            echo
+            echo "## Como validar"
+            echo
+            echo "Confirme que os checks obrigatórios passaram e leia as notas de release abaixo em busca de mudanças incompatíveis antes de mergear."
+            echo
+            echo "<details>"
+            echo "<summary>Notas originais do Dependabot</summary>"
+            echo
+            echo "$notes"
+            echo
+            echo "</details>"
+            echo
+            echo "<!-- dependabot-structured -->"
+          } > body.md
+
+          gh api --method PATCH "repos/$REPO/pulls/$PR_NUMBER" -F body=@body.md > /dev/null
