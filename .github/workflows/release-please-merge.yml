@@ -114,6 +114,9 @@ jobs:
           # A PR de release é aberta por github-actions[bot], que não pode aprovar a própria PR.
           # Com RELEASE_BOT_TOKEN (outra identidade), a aprovação exigida pela ruleset é dada aqui,
           # somente depois da checagem de permissão de quem pediu a release.
+          # Secrets colados com quebra de linha/espaço no fim invalidam o header Authorization.
+          RELEASE_BOT_TOKEN=$(printf '%s' "${RELEASE_BOT_TOKEN:-}" | tr -d '[:space:]')
+
           release_gh() {
             GH_TOKEN="${RELEASE_BOT_TOKEN:-$GH_TOKEN}" gh "$@"
           }
