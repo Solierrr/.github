@@ -15,6 +15,10 @@ on:
       merge-requested:
         description: "Indica se o GitHub aceitou a solicitacao de merge"
         value: ${{ jobs.merge.outputs.merge-requested }}
+    secrets:
+      RELEASE_BOT_TOKEN:
+        description: "Token de uma conta diferente de github-actions[bot], usado para aprovar e mergear a PR de release quando a ruleset exige aprovação. Opcional: sem ele, o fluxo só pede o auto-merge."
+        required: false
 
 jobs:
   merge:
@@ -34,6 +38,7 @@ jobs:
           ACTOR: ${{ github.event.sender.login }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           UPDATE_SOURCE_STATUS: ${{ inputs.update-source-status }}
+          RELEASE_BOT_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
           MERGE_REQUESTED=false
 
@@ -106,7 +111,18 @@ jobs:
             gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$command_comment_id" -f body="$command_comment"
           fi
 
-          if gh pr merge "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --squash --auto; then
+          # A PR de release é aberta por github-actions[bot], que não pode aprovar a própria PR.
+          # Com RELEASE_BOT_TOKEN (outra identidade), a aprovação exigida pela ruleset é dada aqui,
+          # somente depois da checagem de permissão de quem pediu a release.
+          release_gh() {
+            GH_TOKEN="${RELEASE_BOT_TOKEN:-$GH_TOKEN}" gh "$@"
+          }
+
+          if [ -n "${RELEASE_BOT_TOKEN:-}" ]; then
+            release_gh pr review "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --approve               || echo "Não foi possível aprovar a PR de release com RELEASE_BOT_TOKEN; seguindo sem aprovação."
+          fi
+
+          if release_gh pr merge "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --squash --auto; then
             MERGE_REQUESTED=true
             if [ "$UPDATE_SOURCE_STATUS" = "true" ] && [ -n "${SOURCE_PR_NUMBER:-}" ]; then
               release_pr_url="https://github.com/${{ github.repository }}/pull/$RELEASE_PR_NUMBER"
@@ -114,9 +130,9 @@ jobs:
             fi
           elif [ "$UPDATE_SOURCE_STATUS" != "true" ]; then
             echo "Auto-merge indisponível; tentando squash merge imediato."
-            gh pr merge "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --squash
+            release_gh pr merge "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --squash
             MERGE_REQUESTED=true
-          elif gh pr merge "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --squash; then
+          elif release_gh pr merge "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --squash; then
             MERGE_REQUESTED=true
             if [ -n "${SOURCE_PR_NUMBER:-}" ]; then
               release_pr_url="https://github.com/${{ github.repository }}/pull/$RELEASE_PR_NUMBER"
