@@ -4,15 +4,15 @@ on:
   workflow_call:
     inputs:
       environment:
-        description: "GitHub Environment name to report against (e.g. QA, PROD)"
+        description: "GitHub Environment name to report against (e.g. QA, PROD, ALIVE)"
         required: true
         type: string
       check:
-        description: "How to determine status: 'http' or 'gcloud-cluster'"
+        description: "How to determine status: 'http', 'render', or 'gcloud-cluster'"
         required: true
         type: string
       url:
-        description: "Public URL to check (required when check == http; also recorded as the environment_url)"
+        description: "Public URL to check or record as the environment URL"
         required: false
         type: string
       gcp_project_id:
@@ -24,8 +24,14 @@ on:
       gcp_zone:
         required: false
         type: string
+      render_service_id:
+        description: "Render service ID to check when check == render"
+        required: false
+        type: string
     secrets:
       GCP_SA_KEY:
+        required: false
+      RENDER_API_KEY:
         required: false
 
 permissions:
@@ -41,7 +47,7 @@ jobs:
         run: |
           ok=1
           for attempt in 1 2 3 4 5 6 7 8; do
-            if curl --silent --max-time 30 --output /dev/null "${{ inputs.url }}"; then
+            if curl --fail --silent --max-time 30 --output /dev/null "${{ inputs.url }}"; then
               ok=0
               break
             fi
@@ -53,6 +59,76 @@ jobs:
           else
             echo "state=failure" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Check Render deployment
+        if: inputs.check == 'render'
+        id: render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ inputs.render_service_id }}
+        run: |
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$RENDER_SERVICE_ID" ]; then
+            echo "Render check requires RENDER_API_KEY and render_service_id" >&2
+            exit 1
+          fi
+
+          service=$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $RENDER_API_KEY" \
+            --header "Accept: application/json" \
+            "https://api.render.com/v1/services/$RENDER_SERVICE_ID")
+          suspended=$(echo "$service" | jq -r '.suspended // "unknown"')
+          environment_url=$(echo "$service" | jq -r '.serviceDetails.url // empty')
+
+          # A push and Render's auto-deploy run independently. Wait for Render to
+          # report the same commit before recording its result in GitHub.
+          render_status=
+          deployed_sha=
+          for attempt in $(seq 1 40); do
+            deploys=$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $RENDER_API_KEY" \
+              --header "Accept: application/json" \
+              "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=1")
+            render_status=$(echo "$deploys" | jq -r '.[0].deploy.status // empty')
+            deployed_sha=$(echo "$deploys" | jq -r '.[0].deploy.commit.id // empty')
+
+            if [ "$deployed_sha" = "$GITHUB_SHA" ] && \
+              [[ ! "$render_status" =~ ^(created|queued|build_in_progress|update_in_progress|pre_deploy_in_progress)$ ]]; then
+              break
+            fi
+            sleep 15
+          done
+
+          case "$render_status" in
+            live)
+              if [ "$suspended" = "suspended" ]; then
+                state=inactive
+              else
+                state=success
+              fi
+              ;;
+            created|queued|build_in_progress|update_in_progress|pre_deploy_in_progress)
+              state=in_progress
+              ;;
+            deactivated)
+              state=inactive
+              ;;
+            build_failed|update_failed|canceled|pre_deploy_failed)
+              state=failure
+              ;;
+            *)
+              echo "Unexpected Render deploy status: ${render_status:-missing}" >&2
+              state=failure
+              ;;
+          esac
+
+          if [ "$deployed_sha" != "$GITHUB_SHA" ]; then
+            echo "Render has not produced a terminal deployment for GitHub commit $GITHUB_SHA" >&2
+            state=failure
+          fi
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "deploy_status=$render_status" >> "$GITHUB_OUTPUT"
+          echo "deployed_sha=$deployed_sha" >> "$GITHUB_OUTPUT"
+          echo "environment_url=$environment_url" >> "$GITHUB_OUTPUT"
 
       - name: Check cluster active flag
         if: inputs.check == 'gcloud-cluster'
@@ -95,10 +171,13 @@ jobs:
           CHECK: ${{ inputs.check }}
           CLUSTER_ACTIVE: ${{ steps.state.outputs.active }}
           HTTP_STATE: ${{ steps.http.outputs.state }}
+          RENDER_STATE: ${{ steps.render.outputs.state }}
           GCLOUD_STATE: ${{ steps.gcloud.outputs.state }}
         run: |
           if [ "$CHECK" = "gcloud-cluster" ] && [ "$CLUSTER_ACTIVE" = "false" ]; then
             echo "state=inactive" >> "$GITHUB_OUTPUT"
+          elif [ "$CHECK" = "render" ]; then
+            echo "state=$RENDER_STATE" >> "$GITHUB_OUTPUT"
           elif [ -n "$GCLOUD_STATE" ]; then
             echo "state=$GCLOUD_STATE" >> "$GITHUB_OUTPUT"
           else
@@ -110,15 +189,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           STATE: ${{ steps.final.outputs.state }}
           ENVIRONMENT: ${{ inputs.environment }}
-          ENV_URL: ${{ inputs.url }}
+          ENV_URL: ${{ inputs.url || steps.render.outputs.environment_url }}
+          RENDER_STATUS: ${{ steps.render.outputs.deploy_status }}
+          DEPLOYED_SHA: ${{ steps.render.outputs.deployed_sha }}
         run: |
           production_flag=false
           if [ "$ENVIRONMENT" = "PROD" ]; then
             production_flag=true
           fi
 
+          deploy_ref="$GITHUB_SHA"
+          if [ -n "$DEPLOYED_SHA" ]; then
+            deploy_ref="$DEPLOYED_SHA"
+          fi
+
           deploy_body=$(jq -n \
-            --arg ref "$GITHUB_SHA" \
+            --arg ref "$deploy_ref" \
             --arg env "$ENVIRONMENT" \
             --argjson prod "$production_flag" \
             '{ref: $ref, environment: $env, auto_merge: false, required_contexts: [], production_environment: $prod, transient_environment: false}')
@@ -126,8 +212,13 @@ jobs:
           deployment_id=$(echo "$deploy_body" | gh api "repos/${{ github.repository }}/deployments" --input - --jq '.id')
 
           description="Verificação automática de disponibilidade"
-          if [ "$STATE" = "inactive" ]; then
+          if [ -n "$RENDER_STATUS" ]; then
+            description="Render deploy: $RENDER_STATUS"
+          fi
+          if [ "$STATE" = "inactive" ] && [ "$ENVIRONMENT" = "PROD" ]; then
             description="Cluster efêmero desligado de propósito (ephemerality.json)"
+          elif [ "$STATE" = "inactive" ]; then
+            description="Serviço Render suspenso ou deployment desativado"
           fi
 
           status_body=$(jq -n --arg state "$STATE" --arg desc "$description" '{state: $state, description: $desc}')
@@ -141,6 +232,6 @@ jobs:
         env:
           STATE: ${{ steps.final.outputs.state }}
         run: |
-          if [ "$STATE" != "success" ] && [ "$STATE" != "inactive" ]; then
+          if [ "$STATE" != "success" ] && [ "$STATE" != "inactive" ] && [ "$STATE" != "in_progress" ]; then
             exit 1
           fi
