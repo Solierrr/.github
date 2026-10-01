@@ -91,6 +91,42 @@ jobs:
           manifest-file: .release-please-manifest.json
           target-branch: main
 
+      - name: Restructure the release published comment
+        if: steps.release.outputs.merged == 'true' && steps.publish.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.publish.outputs.tag_name }}
+          RELEASE_URL: ${{ steps.publish.outputs.html_url }}
+        run: |
+          pr_number=$(gh pr list --repo "${{ github.repository }}" --base main --state merged --limit 10 --json number,headRefName --jq '[.[] | select(.headRefName | startswith("release-please--"))][0].number')
+          if [ -z "$pr_number" ] || [ "$pr_number" == "null" ]; then
+            echo "Nenhuma pr de release mergeada encontrada, pulando."
+            exit 0
+          fi
+
+          comment_id=$(gh api "repos/${{ github.repository }}/issues/$pr_number/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("🤖 Created releases"))) | .id' | head -n 1)
+          if [ -z "$comment_id" ]; then
+            echo "Comentário padrão do release-please não encontrado, pulando."
+            exit 0
+          fi
+
+          body=$(printf '%s\n' \
+            "## Release publicada" \
+            "" \
+            "A release [$TAG_NAME]($RELEASE_URL) foi criada a partir desta pull request." \
+            "" \
+            "## O que foi publicado" \
+            "" \
+            "A tag \`$TAG_NAME\` foi criada em \`main\` e a página da release traz o changelog desta versão." \
+            "" \
+            "## Próximos passos" \
+            "" \
+            "Se o repositório tiver \`Dockerfile\`, a imagem é publicada pelo workflow \`Release\` a partir da \`main\`." \
+            "" \
+            "<!-- release-please-published -->")
+
+          gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$comment_id" -f body="$body"
+
       - name: Update the source comments with the publication result
         if: steps.release.outputs.eligible == 'true'
         env:

@@ -91,12 +91,26 @@ jobs:
           }
 
           if [ "$UPDATE_SOURCE_STATUS" = "true" ]; then
-            command_comment=$(gh api "repos/${{ github.repository }}/issues/$RELEASE_PR_NUMBER/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-please-command -->")) | .body' | head -n 1)
             command_comment_id=$(gh api "repos/${{ github.repository }}/issues/$RELEASE_PR_NUMBER/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-please-command -->")) | .id' | head -n 1)
             if [ -z "$command_comment_id" ]; then
-              command_comment=$'## Release pronta\n\nPara aprovar a publicação, envie um novo comentário com `/release` neste PR.\n\n<!-- release-please-command -->'
+              command_comment=$(printf '%s\n' \
+                "## Release pronta" \
+                "" \
+                "Esta pull request reúne os commits já integrados em \`main\` desde a última publicação, com o changelog atualizado." \
+                "" \
+                "## Como publicar" \
+                "" \
+                "Comente \`/release\` nesta pull request. Quem tem permissão de escrita no repositório aciona a aprovação e o merge automáticos; a tag e a release são criadas logo depois do merge." \
+                "" \
+                "## Depois da publicação" \
+                "" \
+                "Se o repositório tiver \`Dockerfile\`, a imagem é publicada a partir da \`main\`, e o comentário da pull request original passa a mostrar o link da release." \
+                "" \
+                "<!-- release-please-command -->")
               gh pr comment "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --body "$command_comment"
               command_comment_id=$(gh api "repos/${{ github.repository }}/issues/$RELEASE_PR_NUMBER/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-please-command -->")) | .id' | head -n 1)
+            else
+              command_comment=$(gh api "repos/${{ github.repository }}/issues/comments/$command_comment_id" --jq '.body')
             fi
 
             if ! grep -Fq '<!-- release-please-auto-publish-requested -->' <<< "$command_comment"; then
@@ -121,8 +135,9 @@ jobs:
             GH_TOKEN="${RELEASE_BOT_TOKEN:-$GH_TOKEN}" gh "$@"
           }
 
+          approve_failed=false
           if [ -n "${RELEASE_BOT_TOKEN:-}" ]; then
-            release_gh pr review "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --approve               || echo "Não foi possível aprovar a PR de release com RELEASE_BOT_TOKEN; seguindo sem aprovação."
+            release_gh pr review "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --approve               || { echo "Não foi possível aprovar a PR de release com RELEASE_BOT_TOKEN; seguindo sem aprovação."; approve_failed=true; }
           fi
 
           if release_gh pr merge "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --squash --auto; then
@@ -145,7 +160,9 @@ jobs:
             merge_state=$(gh pr view "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --json mergeStateStatus --jq '.mergeStateStatus')
             if [ -n "${SOURCE_PR_NUMBER:-}" ]; then
               release_pr_url="https://github.com/${{ github.repository }}/pull/$RELEASE_PR_NUMBER"
-              update_source_comment "O GitHub não aceitou o auto-merge (estado: $merge_state). Confira os checks e as aprovações na [PR da release]($release_pr_url)."
+              note=""
+              if [ "$approve_failed" = "true" ]; then note=" O token RELEASE_BOT_TOKEN foi recusado pelo GitHub (credencial inválida ou expirada), então a aprovação automática não aconteceu."; fi
+              update_source_comment "O GitHub não aceitou o auto-merge (estado: $merge_state).$note Confira os checks e as aprovações na [PR da release]($release_pr_url)."
             fi
           fi
 
