@@ -16,8 +16,14 @@ on:
         description: "Indica se o GitHub aceitou a solicitacao de merge"
         value: ${{ jobs.merge.outputs.merge-requested }}
     secrets:
+      BOT_APP_ID:
+        description: "ID do GitHub App usado para aprovar e mergear a PR de release quando a ruleset exige aprovação. Opcional: sem ele, o fluxo usa RELEASE_BOT_TOKEN ou só pede o auto-merge."
+        required: false
+      BOT_APP_PRIVATE_KEY:
+        description: "Chave privada (.pem) do GitHub App informado em BOT_APP_ID."
+        required: false
       RELEASE_BOT_TOKEN:
-        description: "Token de uma conta diferente de github-actions[bot], usado para aprovar e mergear a PR de release quando a ruleset exige aprovação. Opcional: sem ele, o fluxo só pede o auto-merge."
+        description: "Legado: token de uma conta diferente de github-actions[bot]. Só é usado quando o GitHub App não está configurado."
         required: false
 
 jobs:
@@ -29,7 +35,18 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    env:
+      BOT_APP_ID: ${{ secrets.BOT_APP_ID }}
     steps:
+      - name: Generate bot app token
+        id: app-token
+        if: ${{ env.BOT_APP_ID != '' }}
+        uses: actions/create-github-app-token@v2
+        continue-on-error: true
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+
       - name: Merge an authorized release command
         id: merge
         env:
@@ -38,6 +55,7 @@ jobs:
           ACTOR: ${{ github.event.sender.login }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           UPDATE_SOURCE_STATUS: ${{ inputs.update-source-status }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_BOT_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
           MERGE_REQUESTED=false
@@ -126,10 +144,11 @@ jobs:
           fi
 
           # A PR de release é aberta por github-actions[bot], que não pode aprovar a própria PR.
-          # Com RELEASE_BOT_TOKEN (outra identidade), a aprovação exigida pela ruleset é dada aqui,
-          # somente depois da checagem de permissão de quem pediu a release.
+          # Com o token do GitHub App (ou RELEASE_BOT_TOKEN, legado), que é outra identidade,
+          # a aprovação exigida pela ruleset é dada aqui, somente depois da checagem de permissão
+          # de quem pediu a release.
           # Secrets colados com quebra de linha/espaço no fim invalidam o header Authorization.
-          RELEASE_BOT_TOKEN=$(printf '%s' "${RELEASE_BOT_TOKEN:-}" | tr -d '[:space:]')
+          RELEASE_BOT_TOKEN=$(printf '%s' "${APP_TOKEN:-${RELEASE_BOT_TOKEN:-}}" | tr -d '[:space:]')
 
           release_gh() {
             GH_TOKEN="${RELEASE_BOT_TOKEN:-$GH_TOKEN}" gh "$@"
@@ -137,7 +156,7 @@ jobs:
 
           approve_failed=false
           if [ -n "${RELEASE_BOT_TOKEN:-}" ]; then
-            release_gh pr review "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --approve               || { echo "Não foi possível aprovar a PR de release com RELEASE_BOT_TOKEN; seguindo sem aprovação."; approve_failed=true; }
+            release_gh pr review "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --approve               || { echo "Não foi possível aprovar a PR de release com o token do bot; seguindo sem aprovação."; approve_failed=true; }
           fi
 
           if release_gh pr merge "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --squash --auto; then
@@ -161,7 +180,7 @@ jobs:
             if [ -n "${SOURCE_PR_NUMBER:-}" ]; then
               release_pr_url="https://github.com/${{ github.repository }}/pull/$RELEASE_PR_NUMBER"
               note=""
-              if [ "$approve_failed" = "true" ]; then note=" O token RELEASE_BOT_TOKEN foi recusado pelo GitHub (credencial inválida ou expirada), então a aprovação automática não aconteceu."; fi
+              if [ "$approve_failed" = "true" ]; then note=" O token do bot foi recusado pelo GitHub (credencial inválida ou expirada), então a aprovação automática não aconteceu."; fi
               update_source_comment "O GitHub não aceitou o auto-merge (estado: $merge_state).$note Confira os checks e as aprovações na [PR da release]($release_pr_url)."
             fi
           fi
