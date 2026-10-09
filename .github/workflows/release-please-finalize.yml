@@ -121,7 +121,7 @@ jobs:
             "" \
             "## Próximos passos" \
             "" \
-            "Se o repositório tiver \`Dockerfile\`, a imagem é publicada pelo workflow \`Release\` a partir da \`main\`." \
+            "Se o repositório tiver \`Dockerfile\`, a imagem é publicada pelo workflow \`Release\` a partir da \`main\`, com a tag da versão, e o bot abre e mergeia a pull request de bump no \`infra-gitops\`." \
             "" \
             "<!-- release-please-published -->")
 

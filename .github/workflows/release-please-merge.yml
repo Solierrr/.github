@@ -122,7 +122,7 @@ jobs:
                 "" \
                 "## Depois da publicação" \
                 "" \
-                "Se o repositório tiver \`Dockerfile\`, a imagem é publicada a partir da \`main\`, e o comentário da pull request original passa a mostrar o link da release." \
+                "Se o repositório tiver \`Dockerfile\`, a imagem é publicada a partir da \`main\` com a tag da versão, o bot abre e mergeia a pull request de bump no \`infra-gitops\`, e o comentário da pull request original passa a mostrar o link da release." \
                 "" \
                 "<!-- release-please-command -->")
               gh pr comment "$RELEASE_PR_NUMBER" --repo "${{ github.repository }}" --body "$command_comment"

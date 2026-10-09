@@ -46,7 +46,7 @@ jobs:
             "" \
             "## Próximos passos" \
             "" \
-            "Se o repositório tiver \`Dockerfile\`, a imagem é publicada pelo workflow \`Release\` a partir da \`main\`." \
+            "Se o repositório tiver \`Dockerfile\`, a imagem é publicada pelo workflow \`Release\` a partir da \`main\`, com a tag da versão, e o bot abre e mergeia a pull request de bump no \`infra-gitops\`." \
             "" \
             "<!-- release-please-published -->")
 
@@ -73,7 +73,7 @@ jobs:
             "" \
             "## Depois da publicação" \
             "" \
-            "Se o repositório tiver \`Dockerfile\`, a imagem é publicada a partir da \`main\`, e o comentário da pull request original passa a mostrar o link da release." \
+            "Se o repositório tiver \`Dockerfile\`, a imagem é publicada a partir da \`main\` com a tag da versão, o bot abre e mergeia a pull request de bump no \`infra-gitops\`, e o comentário da pull request original passa a mostrar o link da release." \
             "" \
             "<!-- release-please-command -->")
           comment_id=$(gh api "repos/${{ github.repository }}/issues/$pr_number/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-please-command -->") or contains("Fazer release")) | .id' | head -n 1)
