@@ -10,8 +10,20 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Detect a release commit
+        id: release
+        run: |
+          subject=$(git log -1 --format=%s)
+          pattern='^chore\(main\): release ([A-Za-z0-9._-]+ )?([0-9]+\.[0-9]+\.[0-9]+)'
+          if [[ "$subject" =~ $pattern ]]; then
+            echo "version=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+            echo "extra_tag=solarianetwork/${{ github.event.repository.name }}:${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Check for Dockerfile
         id: check
@@ -37,6 +49,7 @@ jobs:
           tags: |
             solarianetwork/${{ github.event.repository.name }}:latest
             solarianetwork/${{ github.event.repository.name }}:${{ github.sha }}
+            ${{ steps.release.outputs.extra_tag }}
 
       - name: Comment image info on PR
         if: steps.check.outputs.has_dockerfile == 'true'
@@ -62,3 +75,17 @@ jobs:
             "- **Registry**: https://hub.docker.com/r/solarianetwork/${repo_name}/tags")
 
           gh pr comment "$pr_number" --repo "${{ github.repository }}" --body "$body"
+
+  gitops-bump:
+    needs: publish
+    if: needs.publish.outputs.version != ''
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: Solierrr/.github/.github/workflows/gitops-bump.yml@main
+    with:
+      service: ${{ github.event.repository.name }}
+      version: ${{ needs.publish.outputs.version }}
+    secrets:
+      BOT_APP_ID: ${{ secrets.BOT_APP_ID }}
+      BOT_APP_PRIVATE_KEY: ${{ secrets.BOT_APP_PRIVATE_KEY }}
