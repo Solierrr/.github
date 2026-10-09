@@ -1,0 +1,204 @@
+name: GitOps Bump
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: "Nome da imagem em solarianetwork/<service>"
+        type: string
+        required: true
+      version:
+        description: "Versão semântica publicada, sem o prefixo v"
+        type: string
+        required: true
+      dry-run:
+        description: "Mostra o que seria alterado, sem abrir PR"
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      BOT_APP_ID:
+        required: true
+      BOT_APP_PRIVATE_KEY:
+        required: true
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      SERVICE: ${{ inputs.service }}
+      VERSION: ${{ inputs.version }}
+      DRY_RUN: ${{ inputs.dry-run }}
+      SOURCE_REPO: ${{ github.repository }}
+      SOURCE_SHA: ${{ github.sha }}
+      GITOPS_REPO: Solierrr/infra-gitops
+    steps:
+      - id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+          owner: Solierrr
+          repositories: infra-gitops
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Solierrr/infra-gitops
+          token: ${{ steps.app-token.outputs.token }}
+          path: infra-gitops
+
+      - name: Find the source pull request
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          number=$(gh api "repos/$SOURCE_REPO/commits/$SOURCE_SHA/pulls" --jq '.[0].number // empty')
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Update the image tag
+        id: update
+        working-directory: infra-gitops
+        run: |
+          files=$(grep -rlE "image: *docker.io/solarianetwork/${SERVICE}:" services apps bootstrap 2>/dev/null || true)
+          if [ -z "$files" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "Nenhum manifesto usa solarianetwork/${SERVICE}; nada a atualizar."
+            exit 0
+          fi
+          for file in $files; do
+            sed -i -E "s#(image: *docker.io/solarianetwork/${SERVICE}:)[^[:space:]]+#\1${VERSION}#" "$file"
+          done
+          if git diff --quiet; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "Os manifestos já usam a versão ${VERSION}."
+            exit 0
+          fi
+          {
+            echo "found=true"
+            echo "files<<EOF"
+            echo "$files"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          git diff
+
+      - name: Open the bump pull request
+        id: pr
+        if: steps.update.outputs.found == 'true' && inputs.dry-run != true
+        working-directory: infra-gitops
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          FILES: ${{ steps.update.outputs.files }}
+          SOURCE_PR: ${{ steps.source.outputs.number }}
+        run: |
+          branch="chore/bump-${SERVICE}-${VERSION}"
+          title="chore: bump ${SERVICE} to ${VERSION}"
+          release_url="https://github.com/${SOURCE_REPO}/releases/tag/v${VERSION}"
+          if [ -n "$SOURCE_PR" ]; then
+            origin="a pull request https://github.com/${SOURCE_REPO}/pull/${SOURCE_PR}"
+          else
+            origin="o commit ${SOURCE_SHA}"
+          fi
+          files_list=$(printf '%s\n' "$FILES" | sed 's/^/- /')
+
+          git config user.name "dive-robot[bot]"
+          git config user.email "5135404+dive-robot[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add -A
+          git commit -m "$title"
+          git push --force-with-lease origin "$branch"
+
+          body=$(printf '%s\n' \
+            "## Objetivo" \
+            "" \
+            "Publicar em produção a versão ${VERSION} de ${SERVICE}, trocando a tag da imagem nos manifestos." \
+            "" \
+            "## Alterações" \
+            "" \
+            "- A imagem docker.io/solarianetwork/${SERVICE} passa para a tag ${VERSION}." \
+            "- Release de origem: ${release_url}, criada a partir d${origin}." \
+            "" \
+            "Manifestos alterados:" \
+            "" \
+            "${files_list}" \
+            "" \
+            "## Recursos impactados" \
+            "" \
+            "O Argo CD sincroniza os manifestos e faz o rollout de ${SERVICE} com a imagem ${VERSION}." \
+            "" \
+            "## Rollback" \
+            "" \
+            "Reverter esta pull request restaura a tag anterior." \
+            "" \
+            "## Como validar" \
+            "" \
+            "Os checks de YAML e de manifestos rodam nesta pull request. Depois do merge, conferir o rollout no Argo CD." \
+            "" \
+            "Aberta e mergeada automaticamente pelo bot de release.")
+
+          url=$(gh pr create --repo "$GITOPS_REPO" --base main --head "$branch" --title "$title" --body "$body")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "number=${url##*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the checks and merge
+        id: merge
+        if: steps.pr.outputs.url != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: |
+          sleep 20
+          if timeout 900 gh pr checks "$PR_URL" --watch --interval 15; then
+            checks=passed
+          else
+            checks=failed
+          fi
+          echo "checks=$checks" >> "$GITHUB_OUTPUT"
+          if [ "$checks" != "passed" ]; then
+            echo "Os checks falharam; a pull request fica aberta para revisão."
+            exit 0
+          fi
+          if gh pr merge "$PR_URL" --squash --delete-branch; then
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on the source pull request
+        if: steps.source.outputs.number != '' && inputs.dry-run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_PR: ${{ steps.source.outputs.number }}
+          BUMP_URL: ${{ steps.pr.outputs.url }}
+          FOUND: ${{ steps.update.outputs.found }}
+          CHECKS: ${{ steps.merge.outputs.checks }}
+          MERGED: ${{ steps.merge.outputs.merged }}
+        run: |
+          image="solarianetwork/${SERVICE}:${VERSION}"
+          if [ "$FOUND" != "true" ]; then
+            status="Nenhum manifesto do infra-gitops usa a imagem solarianetwork/${SERVICE} ou ele já está na versão ${VERSION}, então nenhuma pull request de bump foi aberta."
+          elif [ "$MERGED" = "true" ]; then
+            status="O bot abriu e mergeou a pull request de bump no infra-gitops: ${BUMP_URL}. O Argo CD vai sincronizar o rollout."
+          elif [ "$CHECKS" = "failed" ]; then
+            status="O bot abriu a pull request de bump no infra-gitops, mas os checks falharam: ${BUMP_URL}. Ela ficou aberta para revisão."
+          else
+            status="O bot abriu a pull request de bump no infra-gitops, mas não conseguiu mergeá-la: ${BUMP_URL}. Ela ficou aberta para revisão."
+          fi
+          body=$(printf '%s\n' \
+            "## Imagem publicada" \
+            "" \
+            "A imagem ${image} foi publicada no Docker Hub a partir desta release." \
+            "" \
+            "## Deploy em produção" \
+            "" \
+            "${status}" \
+            "" \
+            "<!-- gitops-bump -->")
+          comment_id=$(gh api "repos/${SOURCE_REPO}/issues/${SOURCE_PR}/comments" --paginate --jq '.[] | select(.body | contains("<!-- gitops-bump -->")) | .id' | head -n 1)
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/${SOURCE_REPO}/issues/comments/${comment_id}" -f body="$body"
+          else
+            gh pr comment "$SOURCE_PR" --repo "$SOURCE_REPO" --body "$body"
+          fi
