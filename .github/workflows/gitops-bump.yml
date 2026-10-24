@@ -16,15 +16,38 @@ on:
         type: boolean
         required: false
         default: false
+      comment:
+        description: "Comenta o resultado na pull request de origem"
+        type: boolean
+        required: false
+        default: true
     secrets:
       BOT_APP_ID:
         required: true
       BOT_APP_PRIVATE_KEY:
         required: true
+    outputs:
+      found:
+        description: "true quando algum manifesto do infra-gitops foi alterado"
+        value: ${{ jobs.bump.outputs.found }}
+      pr-url:
+        description: "Link da pull request de bump no infra-gitops"
+        value: ${{ jobs.bump.outputs.pr-url }}
+      checks:
+        description: "Resultado dos checks da pull request de bump (passed ou failed)"
+        value: ${{ jobs.bump.outputs.checks }}
+      merged:
+        description: "true quando a pull request de bump foi mergeada"
+        value: ${{ jobs.bump.outputs.merged }}
 
 jobs:
   bump:
     runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.update.outputs.found }}
+      pr-url: ${{ steps.pr.outputs.url }}
+      checks: ${{ steps.merge.outputs.checks }}
+      merged: ${{ steps.merge.outputs.merged }}
     permissions:
       contents: read
       pull-requests: write
@@ -167,7 +190,7 @@ jobs:
           fi
 
       - name: Comment on the source pull request
-        if: steps.source.outputs.number != '' && inputs.dry-run != true
+        if: steps.source.outputs.number != '' && inputs.dry-run != true && inputs.comment
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_PR: ${{ steps.source.outputs.number }}
