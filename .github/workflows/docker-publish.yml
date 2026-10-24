@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.release.outputs.version }}
+      has_dockerfile: ${{ steps.check.outputs.has_dockerfile }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +54,7 @@ jobs:
             ${{ steps.release.outputs.extra_tag }}
 
       - name: Comment image info on PR
-        if: steps.check.outputs.has_dockerfile == 'true'
+        if: steps.check.outputs.has_dockerfile == 'true' && steps.release.outputs.version == ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -78,7 +80,7 @@ jobs:
 
   gitops-bump:
     needs: publish
-    if: needs.publish.outputs.version != ''
+    if: needs.publish.outputs.version != '' && needs.publish.outputs.has_dockerfile == 'true'
     permissions:
       contents: read
       pull-requests: write
@@ -86,6 +88,77 @@ jobs:
     with:
       service: ${{ github.event.repository.name }}
       version: ${{ needs.publish.outputs.version }}
+      comment: false
     secrets:
       BOT_APP_ID: ${{ secrets.BOT_APP_ID }}
       BOT_APP_PRIVATE_KEY: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+
+  release-comment:
+    needs: [publish, gitops-bump]
+    if: always() && needs.publish.result == 'success' && needs.publish.outputs.version != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment the release on the release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          VERSION: ${{ needs.publish.outputs.version }}
+          HAS_IMAGE: ${{ needs.publish.outputs.has_dockerfile }}
+          DIGEST: ${{ needs.publish.outputs.digest }}
+          BUMP_RESULT: ${{ needs.gitops-bump.result }}
+          BUMP_FOUND: ${{ needs.gitops-bump.outputs.found }}
+          BUMP_URL: ${{ needs.gitops-bump.outputs.pr-url }}
+          BUMP_CHECKS: ${{ needs.gitops-bump.outputs.checks }}
+          BUMP_MERGED: ${{ needs.gitops-bump.outputs.merged }}
+        run: |
+          pr_number=$(gh api "repos/${REPO}/commits/${GITHUB_SHA}/pulls" --jq '.[0].number // empty')
+          if [ -z "$pr_number" ]; then
+            echo "Nenhuma PR associada a este commit, pulando comentário."
+            exit 0
+          fi
+
+          release_url=""
+          for attempt in 1 2 3 4 5 6; do
+            release_tag=$(gh release list --repo "$REPO" --limit 20 --json tagName --jq ".[] | select(.tagName | endswith(\"v${VERSION}\")) | .tagName" | head -n 1)
+            if [ -n "$release_tag" ]; then
+              release_url=$(gh release view "$release_tag" --repo "$REPO" --json url --jq '.url')
+              break
+            fi
+            sleep 10
+          done
+          if [ -z "$release_url" ]; then
+            release_url="https://github.com/${REPO}/releases/tag/v${VERSION}"
+          fi
+
+          lines=("## Release ${VERSION} publicado" '' "- Versão: ${VERSION}")
+          if [ "$HAS_IMAGE" = "true" ]; then
+            lines+=("- Imagem: \`solarianetwork/${REPO_NAME}:${VERSION}\` (também \`:${GITHUB_SHA}\` e \`:latest\`)")
+            lines+=("- Digest: \`${DIGEST}\`")
+          fi
+          lines+=("- Release: ${release_url}")
+          if [ "$HAS_IMAGE" = "true" ]; then
+            if [ -n "$BUMP_URL" ]; then
+              if [ "$BUMP_MERGED" = "true" ]; then
+                bump="${BUMP_URL} (mergeada; o Argo CD sincroniza o rollout)"
+              elif [ "$BUMP_CHECKS" = "failed" ]; then
+                bump="${BUMP_URL} (aberta para revisão: os checks falharam)"
+              else
+                bump="${BUMP_URL} (aberta para revisão)"
+              fi
+            elif [ "$BUMP_RESULT" = "success" ] && [ "$BUMP_FOUND" != "true" ]; then
+              bump="nenhuma; nenhum manifesto usa a imagem ou ele já está na versão ${VERSION}"
+            else
+              bump="não aberta; o gitops-bump falhou (${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID})"
+            fi
+            lines+=("- PR no infra-gitops: ${bump}")
+          fi
+          lines+=('' "<!-- release-published -->")
+          body=$(printf '%s\n' "${lines[@]}")
+
+          comment_id=$(gh api "repos/${REPO}/issues/${pr_number}/comments" --paginate --jq '.[] | select(.body | contains("<!-- release-published -->")) | .id' | head -n 1)
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/${REPO}/issues/comments/${comment_id}" -f body="$body"
+          else
+            gh pr comment "$pr_number" --repo "$REPO" --body "$body"
+          fi
