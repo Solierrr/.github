@@ -15,6 +15,11 @@ on:
         description: "Public URL to check (required when check == http; also recorded as the environment_url)"
         required: false
         type: string
+      ready_path:
+        description: "Readiness path appended to url (e.g. /ready or /actuator/health/readiness); any HTTP error on it counts as down. Without it, the url itself is checked and only 5xx counts as down"
+        required: false
+        type: string
+        default: ""
       gcp_project_id:
         required: false
         type: string
@@ -38,12 +43,29 @@ jobs:
       - name: HTTP check
         if: inputs.check == 'http'
         id: http
+        env:
+          URL: ${{ inputs.url }}
+          READY_PATH: ${{ inputs.ready_path }}
         run: |
+          target="$URL"
+          if [ -n "$READY_PATH" ]; then
+            target="${URL%/}/${READY_PATH#/}"
+          fi
+          echo "Verificando $target"
+
           ok=1
           for attempt in 1 2 3 4 5 6 7 8; do
-            if curl --silent --max-time 30 --output /dev/null "${{ inputs.url }}"; then
-              ok=0
-              break
+            if [ -n "$READY_PATH" ]; then
+              if curl --fail --silent --max-time 30 --output /dev/null "$target"; then
+                ok=0
+                break
+              fi
+            else
+              code=$(curl --silent --max-time 30 --output /dev/null --write-out '%{http_code}' "$target" || true)
+              if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then
+                ok=0
+                break
+              fi
             fi
             sleep 20
           done
