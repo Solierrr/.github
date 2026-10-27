@@ -8,6 +8,10 @@ Ambientes:
 - local: só aviso;
 - qa: erro, se o repositório tiver a branch qa; sem a branch, é ignorado;
 - prod: erro.
+
+O campo ignore aceita uma lista (vale para todos os ambientes) e o campo
+ignore_by_env aceita uma lista por ambiente, para variáveis que só não existem em
+um deles.
 """
 
 import json
@@ -47,6 +51,7 @@ def main():
     config = json.loads(os.environ["INFISICAL_CONFIG"])
     folders = config.get("folders") or []
     ignore = set(config.get("ignore") or [])
+    ignore_by_env = {env: set(names or []) for env, names in (config.get("ignore_by_env") or {}).items()}
     project = os.environ["INFISICAL_PROJECT_ID"]
     token = os.environ["INFISICAL_TOKEN"]
     has_qa = os.environ.get("HAS_QA_BRANCH") == "true"
@@ -82,6 +87,9 @@ def main():
             for key, has_value in exported.items():
                 values[key] = values.get(key, False) or has_value
         for key in keys:
+            if key in ignore_by_env.get(env, set()):
+                status[key][env] = "ignorada"
+                continue
             if key not in values:
                 status[key][env] = "ausente"
                 print(f"::{level} file={env_file}::{key} não existe nas pastas declaradas no ambiente {env}.")
@@ -98,6 +106,9 @@ def main():
         summary.append(f"| `{key}` | {row.get('local', '-')} | {row.get('qa', '-')} | {row.get('prod', '-')} |")
     if ignore:
         summary += ["", f"Ignoradas: {', '.join(sorted(ignore))}"]
+    for env, names in sorted(ignore_by_env.items()):
+        if names:
+            summary += ["", f"Ignoradas em {env}: {', '.join(sorted(names))}"]
 
     output = os.environ.get("GITHUB_STEP_SUMMARY")
     if output:
