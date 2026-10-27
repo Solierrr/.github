@@ -1,0 +1,79 @@
+name: Infisical Env Check
+
+on:
+  workflow_call:
+    inputs:
+      env_file:
+        description: "Arquivo com os nomes das variáveis do repositório"
+        required: false
+        type: string
+        default: ".env.example"
+      project_id:
+        description: "Projeto do Infisical"
+        required: false
+        type: string
+        default: "2296d19c-5f3b-41e1-afa3-fcde39966a71"
+    secrets:
+      INFISICAL_CLIENT_ID:
+        required: true
+      INFISICAL_CLIENT_SECRET:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ler infisical.yaml
+        id: config
+        run: |
+          if [ ! -f infisical.yaml ]; then
+            echo "::notice::Repositório sem infisical.yaml, checagem ignorada."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "json<<EOF"
+            yq -o=json -I=0 '.' infisical.yaml
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --heads origin qa > /dev/null; then
+            echo "has_qa=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_qa=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Baixar o script de checagem
+        if: steps.config.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Solierrr/.github
+          ref: main
+          path: .org-github
+          sparse-checkout: .github/scripts
+
+      - name: Instalar o Infisical CLI
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSL https://github.com/Infisical/cli/releases/download/v0.44.9/cli_0.44.9_linux_amd64.tar.gz -o /tmp/infisical.tar.gz
+          echo "4005a430258df60401ae5288ab0412371f2e56f224ed461758dd2ec83887d556  /tmp/infisical.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/infisical.tar.gz -C /usr/local/bin infisical
+
+      - name: Conferir as variáveis
+        if: steps.config.outputs.enabled == 'true'
+        env:
+          INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
+          INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          INFISICAL_CONFIG: ${{ steps.config.outputs.json }}
+          INFISICAL_PROJECT_ID: ${{ inputs.project_id }}
+          HAS_QA_BRANCH: ${{ steps.config.outputs.has_qa }}
+          ENV_FILE: ${{ inputs.env_file }}
+        run: |
+          token=$(infisical login --method=universal-auth --client-id="$INFISICAL_CLIENT_ID" --client-secret="$INFISICAL_CLIENT_SECRET" --silent --plain)
+          echo "::add-mask::$token"
+          INFISICAL_TOKEN="$token" python3 .org-github/.github/scripts/check_infisical_env.py
