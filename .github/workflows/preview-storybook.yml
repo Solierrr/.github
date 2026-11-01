@@ -1,0 +1,83 @@
+name: Preview storybook
+
+# Storybook publicado no GitHub Pages, no mesmo ambiente e com as mesmas regras da galeria:
+# `publish: false` só testa (opcional) e constrói; `publish: true` também publica.
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Versão do Node.
+        type: string
+        default: "24"
+      test:
+        description: Roda os testes das histórias.
+        type: boolean
+        default: false
+      test-command:
+        description: Comando dos testes das histórias.
+        type: string
+        default: npm run test:storybook
+      publish:
+        description: Publica o build no GitHub Pages.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      VITE_COMMIT: ${{ github.sha }}
+      VITE_REPOSITORY: ${{ github.event.repository.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install the Playwright browser
+        if: inputs.test
+        run: npx playwright install --with-deps chromium
+
+      - name: Test the stories
+        if: inputs.test
+        env:
+          TEST_COMMAND: ${{ inputs.test-command }}
+        run: bash -c "$TEST_COMMAND"
+
+      - name: Build Storybook
+        run: npm run build-storybook
+
+      - uses: actions/configure-pages@v5
+        if: inputs.publish
+
+      - uses: actions/upload-pages-artifact@v3
+        if: inputs.publish
+        with:
+          path: storybook-static
+
+  deploy:
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: PREVIEW
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
