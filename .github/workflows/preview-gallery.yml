@@ -1,0 +1,94 @@
+name: Preview gallery
+
+# Galeria Vite publicada no GitHub Pages. Quem chama concede pages: write e id-token: write e decide
+# se publica (push na main) ou só confere (pull request): `publish: false` roda typecheck e build sem publicar.
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Pasta da galeria, com package.json próprio.
+        type: string
+        default: gallery
+      node-version:
+        description: Versão do Node.
+        type: string
+        default: "24"
+      root-install:
+        description: Instala as dependências do repositório antes (galerias que importam o código do projeto).
+        type: boolean
+        default: false
+      root-command:
+        description: Comando rodado na raiz antes da galeria, depois da instalação (por exemplo, o build do projeto).
+        type: string
+        default: ""
+      publish:
+        description: Publica o build no GitHub Pages.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      VITE_COMMIT: ${{ github.sha }}
+      VITE_REPOSITORY: ${{ github.event.repository.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Install the repository dependencies
+        if: inputs.root-install
+        run: npm ci --ignore-scripts
+
+      - name: Run the repository command
+        if: inputs.root-command != ''
+        env:
+          ROOT_COMMAND: ${{ inputs.root-command }}
+        run: bash -c "$ROOT_COMMAND"
+
+      - name: Install the gallery dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: npm ci --ignore-scripts
+
+      - name: Type check
+        working-directory: ${{ inputs.working-directory }}
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: ${{ inputs.working-directory }}
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+        if: inputs.publish
+
+      - uses: actions/upload-pages-artifact@v3
+        if: inputs.publish
+        with:
+          path: ${{ inputs.working-directory }}/dist
+
+  deploy:
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: PREVIEW
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
