@@ -4,7 +4,7 @@
 
 # Energia solar conectada
 
-Uma plataforma para contratar energia solar do começo ao fim. Quem quer instalar placas encontra quem projeta, instala e vende, e acompanha tudo em um só lugar.
+Esta é uma plataforma para contratar energia solar do começo ao fim. Quem quer instalar placas encontra quem projeta, instala e vende, compara propostas e acompanha o serviço em um só lugar. Cada pessoa participa de acordo com o seu papel, seja consumidor, profissional, empresa ou fornecedor, e todas conversam e fecham negócio sem sair da plataforma. A ideia é tornar a adoção da energia solar mais simples, mais clara e mais segura para quem contrata e mais organizada para quem presta o serviço.
 
 Contratar energia solar costuma envolver muita gente e muita conversa solta. O consumidor precisa entender a própria conta de luz, achar um profissional de confiança, comparar propostas e acompanhar a obra. A plataforma junta essas etapas em um único caminho, para que cada pessoa saiba onde está e o que falta.
 
