@@ -1,12 +1,30 @@
-## Hi there 👋
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Solierrr/.github/main/profile/assets/banner.png" alt="Mãos em parceria" width="100%">
+</p>
 
-<!--
+# Energia solar conectada
 
-**Here are some ideas to get you started:**
+Esta é uma plataforma para contratar energia solar do começo ao fim. Quem quer instalar placas encontra quem projeta, instala e vende, compara propostas e acompanha o serviço em um só lugar. Cada pessoa participa de acordo com o seu papel, seja consumidor, profissional, empresa ou fornecedor, e todas conversam e fecham negócio sem sair da plataforma. A ideia é tornar a adoção da energia solar mais simples, mais clara e mais segura para quem contrata e mais organizada para quem presta o serviço.
 
-🙋‍♀️ A short introduction - what is your organization all about?
-🌈 Contribution guidelines - how can the community get involved?
-👩‍💻 Useful resources - where can the community find your docs? Is there anything else the community should know?
-🍿 Fun facts - what does your team eat for breakfast?
-🧙 Remember, you can do mighty things with the power of [Markdown](https://docs.github.com/github/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)
--->
+Contratar energia solar costuma envolver muita gente e muita conversa solta. O consumidor precisa entender a própria conta de luz, achar um profissional de confiança, comparar propostas e acompanhar a obra. A plataforma junta essas etapas em um único caminho, para que cada pessoa saiba onde está e o que falta.
+
+## Como funciona
+
+1. O consumidor cadastra a unidade consumidora e envia a fatura de energia.
+2. Ele busca profissionais, empresas e produtos e recebe propostas.
+3. Ao aceitar uma proposta, ela vira um projeto com contrato.
+4. Um técnico executa o serviço e o consumidor acompanha até a entrega.
+
+## Quem participa
+
+- Consumidores cadastram unidades e faturas, recebem propostas e acompanham os projetos.
+- Profissionais enviam seus documentos e certificações e só aparecem para os clientes depois de aprovados.
+- Empresas cuidam da equipe, das ofertas, do estoque e das vendas.
+- Fornecedores mantêm o catálogo de marcas, modelos e ofertas de produtos.
+
+## O que a plataforma oferece
+
+- Conversas individuais, em grupo e na comunidade de cada projeto, com mensagens em tempo real.
+- Um assistente virtual para tirar dúvidas.
+- Recomendações de ofertas, profissionais e fornecedores.
+- Avisos por e-mail e no celular.
