@@ -4,8 +4,38 @@
 
 # Energia solar conectada
 
-A plataforma aproxima quem quer adotar energia solar de quem sabe projetar, instalar e vender. Consumidores cadastram suas unidades e faturas de energia, encontram profissionais, empresas e produtos e negociam propostas. Depois que uma proposta é aceita, o trabalho se torna um projeto, com contrato e serviço técnico acompanhados até a entrega.
+Uma plataforma para contratar energia solar do começo ao fim. Quem quer instalar placas encontra quem projeta, instala e vende, e acompanha tudo em um só lugar.
 
-Do outro lado, empresas organizam equipe, ofertas, estoque e vendas, e profissionais comprovam suas qualificações para serem encontrados. Quem contrata conversa com todos esses participantes sem sair da plataforma, em conversas individuais, em grupos e na comunidade de cada projeto, e conta com um assistente virtual e com recomendações para escolher melhor.
+## Sobre a plataforma
 
-Esta organização reúne os repositórios que sustentam todo esse caminho. Eles cobrem os aplicativos web e móvel, os serviços de acesso, cadastro, mensagens e envio de e-mails, as ferramentas de inteligência artificial, os bancos de dados e a infraestrutura que mantém tudo no ar.
+Contratar energia solar costuma envolver muita gente e muita conversa solta. O consumidor precisa entender a própria conta de luz, achar um profissional de confiança, comparar propostas e acompanhar a obra. A plataforma junta essas etapas em um único caminho, para que cada pessoa saiba onde está e o que falta.
+
+## Como funciona
+
+1. O consumidor cadastra a unidade consumidora e envia a fatura de energia.
+2. Ele busca profissionais, empresas e produtos e recebe propostas.
+3. Ao aceitar uma proposta, ela vira um projeto com contrato.
+4. Um técnico executa o serviço e o consumidor acompanha até a entrega.
+
+## Quem participa
+
+- Consumidores cadastram unidades e faturas, recebem propostas e acompanham os projetos.
+- Profissionais enviam seus documentos e certificações e só aparecem para os clientes depois de aprovados.
+- Empresas cuidam da equipe, das ofertas, do estoque e das vendas.
+- Fornecedores mantêm o catálogo de marcas, modelos e ofertas de produtos.
+
+## O que a plataforma oferece
+
+- Conversas individuais, em grupo e na comunidade de cada projeto, com mensagens em tempo real.
+- Um assistente virtual para tirar dúvidas.
+- Recomendações de ofertas, profissionais e fornecedores.
+- Avisos por e-mail e no celular.
+
+## Repositórios
+
+Esta organização reúne o código da plataforma, separado por função.
+
+- Aplicativos web e móvel, usados no dia a dia.
+- Serviços de acesso, cadastro, mensagens, e-mails e recomendações.
+- Ferramentas de inteligência artificial, como o assistente e a validação de documentos.
+- Bancos de dados e a infraestrutura que mantém tudo no ar.
