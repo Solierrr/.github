@@ -6,8 +6,6 @@
 
 Uma plataforma para contratar energia solar do começo ao fim. Quem quer instalar placas encontra quem projeta, instala e vende, e acompanha tudo em um só lugar.
 
-## Sobre a plataforma
-
 Contratar energia solar costuma envolver muita gente e muita conversa solta. O consumidor precisa entender a própria conta de luz, achar um profissional de confiança, comparar propostas e acompanhar a obra. A plataforma junta essas etapas em um único caminho, para que cada pessoa saiba onde está e o que falta.
 
 ## Como funciona
@@ -30,12 +28,3 @@ Contratar energia solar costuma envolver muita gente e muita conversa solta. O c
 - Um assistente virtual para tirar dúvidas.
 - Recomendações de ofertas, profissionais e fornecedores.
 - Avisos por e-mail e no celular.
-
-## Repositórios
-
-Esta organização reúne o código da plataforma, separado por função.
-
-- Aplicativos web e móvel, usados no dia a dia.
-- Serviços de acesso, cadastro, mensagens, e-mails e recomendações.
-- Ferramentas de inteligência artificial, como o assistente e a validação de documentos.
-- Bancos de dados e a infraestrutura que mantém tudo no ar.
